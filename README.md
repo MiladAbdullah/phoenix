@@ -12,8 +12,9 @@ This document currently cover the followings:
 To download python 3.11 on a linux machine (preferably ubuntu) perform the following commands:
 
 ```command-line
-apt-get install python3.11
-apt install python3.11-venv
+sudo apt update && sudo apt upgrade
+sudo apt-get install python3.11
+sudo apt install python3.11-venv
 ```
 
 It is recommended to use a virtual environment which helps portability and package management. It also prevent cross-project dependency. To set up a virtual environment, run the following command:
@@ -51,7 +52,7 @@ ipython
 
 
 
-## Downloading a database
+## Downloading a Database
 All database files are loaded from the GraalVM benchmarking project Zenodo. https://zenodo.org/communities/graalvm-compiler-benchmark-results?page=1&size=20
 
 to cite the artifact, the given bib is:
@@ -93,7 +94,38 @@ tar -xf graal-2022-jan.tar.xf
 Since the `downloads` (and `env`) folders are ignored by `.gitignore`, this steps will not be committed.
 
 
+## Extracting Measurements
+The hierarchy of measurements in the downloaded database is explained in the original paper: https://dl.acm.org/doi/epdf/10.1145/3578245.3585025. However, we plan to extract the data into form of collected runs from different machines. Each run is stored in an individual file and they share the folder of the same benchmark configuration on the same version and platform. The extract tool is written in python, that goes through the downloaded files, and finds how many combinations and measurement exist in a given database folder. If the tool is run without any extra arguments, it only collects meta data and save it under the folder of extracted. Do not worry if you do not have required folders, it creates them.
 
+```command-line
+python extract.py "downloads/2022-01"
+```
 
+After collecting the meta data, it writes them in `extracted/2022-01_metadata.csv`. It also prints the available combinations:
+```shell
+    The meta data from the folder is loaded
+    use the -x or --extract attribute and specify the followings:
+    --machine_type: [6, 5]
+    --configuration: [34, 43, 39, 35, 40, 41, 42]
+    --suite: [7, 14, 5, 13, 9]
+    --benchmark: [138, 293, 137, 288, 130, 298, 111, 120, 290, 258]...
+    --platform_type: [26, 28, 16, 27, 12, 32, 13, 14, 17, 29]...
+    --repository: [23, 25, 18, 24, 13, 14, 15, 19, 16]
+    --platform_installation: [34773, 34818, 35514, 35056, 22365, 34993, 34197, 34599, 34991, 34858]...
+    --version: [71534, 71561, 72372, 71854, 57857, 71778, 71036, 71350, 71789, 71638]...
+    For the full list check extracted/2022-01_metadata.csv
+```
+* Note that re-running the command above, will be quicker as it extract meta data only once: try it.
+To query specific configuration use the following command:
 
-  
+```command-line
+python extract.py "downloads/2022-01" -x -m=5 -c=43  -b=137  
+```
+```shell
+Are you sure to extract 2717 measurements? [y/N]:y
+```
+The above command will load/copy 2717 runs for all machine type where `id=5`, all configuration where `id=43` and all benchmarks where `id=137`. The hierarchy in which we extract the runs is as following
+
+`machine type id/ configuration id/ suite id/ benchmark id/ platform type id/ repository id/ platform_installation id/ version id/ year-month/ measurement id .csv`
+
+To specify another folder to write in use argument `-o` or `--output`
