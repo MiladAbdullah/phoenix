@@ -1,0 +1,23 @@
+{
+    "configuration": {
+        "machine_type": "...",
+        "configuration": "...",
+        "suite": "...",
+        "benchmark": "...",
+        "platform": "...",
+        "version_type": "..."
+    },
+    "first": "the date and time of first sample in the training set",
+    "last": "the date and time of last sample in the training set",
+    "runs_iterations": {
+        "0.01" : "the amount of [runs, iterations] required to have  1% false negatives",
+        "0.05" : "the amount of [runs, iterations] required to have  5% false negatives",
+        "0.1"  : "the amount of [runs, iterations] required to have 10% false negatives",
+        "0.25" : "the amount of [runs, iterations] required to have 25% false negatives",
+        "0.5"  : "the amount of [runs, iterations] required to have 50% false negatives",
+        "0.75" : "the amount of [runs, iterations] required to have 75% false negatives",
+        "0.9"  : "the amount of [runs, iterations] required to have 90% false negatives"
+    }
+    
+
+}
