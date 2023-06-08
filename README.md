@@ -4,23 +4,22 @@ This project deals with the GraalVM benchmarking project and attempts to reduce 
 This file contains startup configurations to setup the working environment. Since the database files are oversized for git storage, we use them locally. However, it is important to keep the name of the folders same. 
 
 This document currently cover the followings:
-* How to install python3.11 and set up an environment on local machine.
+* How to install python3 and set up an environment on local machine.
 * How to download and extract a benchmarking database of GraalVM Benchmarking project.
 * A script to extract data from specific benchmark/configuration.
 
-## Python 3.11
-To download python 3.11 on a Ubuntu perform the following commands:
+## Python 3
+To download python 3 on a Ubuntu perform the following commands:
 
 ```command-line
-sudo add-apt-repository ppa:deadsnakes/ppa
 sudo apt update && sudo apt upgrade
-sudo apt install python3.11 python3.11-venv
+sudo apt install python3 python3-venv
 ```
 
 It is recommended to use a virtual environment which helps portability and package management. It also prevent cross-project dependency. To set up a virtual environment, run the following command:
 
 ```command-line
-python3.11 -m vevn env
+python3 -m vevn env
 ```
 
 Once the environment is created, it needs to be activated. The activation is required to be done on every time opened the folder (some people add it to .bashrc). Simply run:
@@ -98,28 +97,60 @@ Since the `downloads` (and `env`) folders are ignored by `.gitignore`, this step
 The hierarchy of measurements in the downloaded database is explained in the original paper: https://dl.acm.org/doi/epdf/10.1145/3578245.3585025. However, we plan to extract the data into form of collected runs from different machines. Each run is stored in an individual file and they share the folder of the same benchmark configuration on the same version and platform. The extract tool is written in python, that goes through the downloaded files, and finds how many combinations and measurement exist in a given database folder. If the tool is run without any extra arguments, it only collects meta data and save it under the folder of extracted. Do not worry if you do not have required folders, it creates them.
 
 ```command-line
-python extract.py "downloads/2022-01"
+python extract.py downloads/2022-01
 ```
 
 After collecting the meta data, it writes them in `extracted/2022-01_metadata.csv`. It also prints the available combinations:
 ```shell
-    The meta data from the folder is loaded
-    use the -x or --extract attribute and specify the followings:
-    --machine_type: [6, 5]
-    --configuration: [34, 43, 39, 35, 40, 41, 42]
-    --suite: [7, 14, 5, 13, 9]
-    --benchmark: [138, 293, 137, 288, 130, 298, 111, 120, 290, 258]...
-    --platform_type: [26, 28, 16, 27, 12, 32, 13, 14, 17, 29]...
-    --repository: [23, 25, 18, 24, 13, 14, 15, 19, 16]
-    --platform_installation: [34773, 34818, 35514, 35056, 22365, 34993, 34197, 34599, 34991, 34858]...
-    --version: [71534, 71561, 72372, 71854, 57857, 71778, 71036, 71350, 71789, 71638]...
-    For the full list check extracted/2022-01_metadata.csv
+The meta data from the folder is loaded
+use the -x or --extract attribute and specify the followings:
+
+Found 2088898 measurements.
+
+--machine_type: [6, 5]
+--configuration: [34, 43, 39, 35, 40, 41, 42]
+--suite: [7, 14, 5, 13, 9]
+--benchmark: [138, 293, 137, 288, 130, 298, 111, 120, 290, 258]...
+--platform_type: [26, 28, 16, 27, 12, 32, 13, 14, 17, 29]...
+--repository: [23, 25, 18, 24, 13, 14, 15, 19, 16]
+--platform_installation: [34773, 34818, 35514, 35056, 22365, 34993, 34197, 34599, 34991, 34858]...
+--version: [71534, 71561, 72372, 71854, 57857, 71778, 71036, 71350, 71789, 71638]...
 ```
 * Note that re-running the command above, will be quicker as it extract meta data only once: try it.
 To query specific configuration use the following command:
 
+The `2022-01` data has 2088898 measurements. In order to filter out the measurements we can specify the machine type and configuration we are interested in and it narrows down to the smaller number of measurements. For example:
+
 ```command-line
-python extract.py "downloads/2022-01" -x -m=5 -c=43  -b=137  
+python extract.py downloads/2022-01 --machine_type 5 --suite 7 --platform_type 28 --configuration 34
+```
+
+Will show the following measurements:
+```shell
+The meta data from the folder is loaded
+use the -x or --extract attribute and specify the followings:
+
+Found 14687 measurements.
+
+--machine_type: [5]
+--configuration: [34]
+--suite: [7]
+--benchmark: [142, 139, 130, 131, 132, 138, 136, 128, 129, 141]...
+--platform_type: [28]
+--repository: [25]
+--platform_installation: [34818, 31161]
+--version: [71561, 67559]
+```
+
+All arguments can be shown using:
+```command-line
+python extract.py -h 
+```
+
+To extract measurements `-x` or `--extract` flag should be on.
+
+```command-line
+python extract.py downloads/2022-01 -x -m=5 -c=43  -b=137  
 ```
 ```shell
 Are you sure to extract 2717 measurements? [y/N]:y
@@ -128,4 +159,4 @@ The above command will load/copy 2717 runs for all machine type where `id=5`, al
 
 `machine type id/ configuration id/ suite id/ benchmark id/ platform type id/ repository id/ platform_installation id/ version id/ year-month/ measurement id .csv`
 
-To specify another folder to write in use argument `-o` or `--output`
+To specify another folder to write in use argument `-o` or `--output`. For always `yes` use the command with `-y` or `--yes`.
