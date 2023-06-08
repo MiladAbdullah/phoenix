@@ -92,7 +92,10 @@ def run(args : argparse.Namespace, meta_data: pd.DataFrame, output_folder: Path,
 		data = data[data[identifier]==value]
 	
 	if data.size > 0:
-		prompt = input(f"Are you sure to extract {data.size} measurements? [y/N]: ").lower()
+		if not args.yes:
+			prompt = input(f"Are you sure to extract {data.size} measurements? [y/N]: ").lower()
+		else:
+			prompt = "y"
 		if prompt == "y" or prompt == "yes" or prompt == "ano":
 			records = data.to_dict('records')
 			for record in records:
@@ -123,19 +126,36 @@ def extract(args : argparse.Namespace) -> None:
 	if args.extract:
 		run(args, meta_data, output_folder , year_month)
 	else:
-		print (f"\nThe meta data from the folder is loaded")
+		print (f"The meta data from the folder is loaded")
 		print ("use the -x or --extract attribute and specify the followings:")
 		identifiers = [k for k,v in args.__dict__.items() if isinstance(v,int) and not isinstance(v, bool)]
+		
+		current_meta_data = meta_data
+  
+		# filter out the data
 		for identifier in identifiers:
-			uniques = meta_data[identifier].unique()
+			value = args.__dict__[identifier]
+			if value > 0:
+				current_meta_data = current_meta_data[current_meta_data[identifier]==value]	
+    			
+		if current_meta_data.size == 0:
+			print (f"No measurement was found, try the following filters:\n")
+			current_meta_data = meta_data
+		else:
+			print (f"\nFound {current_meta_data.size} measurements.\n")
+        
+		for identifier in identifiers:
+			uniques = current_meta_data[identifier].unique()
 			print (f"--{identifier}: {[u for u in uniques[:min(10,len(uniques))]]}{'...' if len(uniques) > 10 else ''}")
-		print (f"\nFor the full list check {file_name}")
+		
+		
             
 
 def main():
     parser = argparse.ArgumentParser(description='Compute the GRAAL data')
     parser.add_argument('input_folder', type=str, help='input folder')
     parser.add_argument('-x', '--extract', action=argparse.BooleanOptionalAction, help='extract', default=False)
+    parser.add_argument('-y', '--yes', action=argparse.BooleanOptionalAction, help='confirm extracting', default=False)
     
     parser.add_argument('-m', '--machine_type', type=int, help='Machine Type ID.', default=0)
     parser.add_argument('-c', '--configuration', type=int, help='Configuration ID', default=0)
