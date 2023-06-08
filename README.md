@@ -9,12 +9,12 @@ This document currently cover the followings:
 * A script to extract data from specific benchmark/configuration.
 
 ## Python 3.11
-To download python 3.11 on a linux machine (preferably ubuntu) perform the following commands:
+To download python 3.11 on a Ubuntu perform the following commands:
 
 ```command-line
+sudo add-apt-repository ppa:deadsnakes/ppa
 sudo apt update && sudo apt upgrade
-sudo apt-get install python3.11
-sudo apt install python3.11-venv
+sudo apt install python3.11 python3.11-venv
 ```
 
 It is recommended to use a virtual environment which helps portability and package management. It also prevent cross-project dependency. To set up a virtual environment, run the following command:
