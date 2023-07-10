@@ -157,6 +157,6 @@ Are you sure to extract 2717 measurements? [y/N]:y
 ```
 The above command will load/copy 2717 runs for all machine type where `id=5`, all configuration where `id=43` and all benchmarks where `id=137`. The hierarchy in which we extract the runs is as following
 
-`machine type id/ configuration id/ suite id/ benchmark id/ platform type id/ repository id/ platform_installation id/ version id/ year-month/ measurement id .csv`
+`machine type id/ configuration id/ suite id/ benchmark id/ platform type id/ repository id/ platform_installation id/ version id/ measurement id .csv`
 
 To specify another folder to write in use argument `-o` or `--output`. For always `yes` use the command with `-y` or `--yes`.
