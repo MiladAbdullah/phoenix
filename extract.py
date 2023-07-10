@@ -4,7 +4,7 @@ from pathlib import Path
 import shutil
 import json
 
-def save_meta(input_folder :Path, output_file:Path) -> pd.DataFrame:
+def save_meta(input_folder :Path, output_file: Path) -> pd.DataFrame:
 	"""_summary_
 		Greedily goes through all files that exists in input folder and finds all configurations and benchmarks
 		that exist.
@@ -15,6 +15,7 @@ def save_meta(input_folder :Path, output_file:Path) -> pd.DataFrame:
 	Returns:
 		pd.DataFrame: A CSV file consisting of the meta data extracted from given folder.
 	"""
+ 
 	if output_file.exists():
 		return pd.read_csv(output_file)
 
@@ -39,7 +40,7 @@ def save_meta(input_folder :Path, output_file:Path) -> pd.DataFrame:
 	for meta_data in all_meta_data:
 		meta_dict = read_json(meta_data)
 
-		entities.append({
+		entity = {
 			'machine_type': machine_hosts[meta_dict['machine_host']],
 			'machine_type_name': machine_types[machine_hosts[meta_dict['machine_host']]],
 			'machine_host': meta_dict['machine_host'],
@@ -61,10 +62,15 @@ def save_meta(input_folder :Path, output_file:Path) -> pd.DataFrame:
 			'version': installations[meta_dict['platform_installation']]['version'],
 			'version_time':versions[installations[meta_dict['platform_installation']]['version']]['time'],
 			'version_hash':versions[installations[meta_dict['platform_installation']]['version']]['hash'],
-
-
-			'id':str(meta_data).split('/')[-2],
-			'path':str(meta_data.parent),
+			"filename": str(meta_data).split('/')[-2] + ".csv",
+   			'id':str(meta_data).split('/')[-2],
+			'source_path':str(meta_data.parent.resolve() / "default.csv"),
+		}
+		entities.append({
+			**entity,
+			'extracted_path': str(output_file.parent.resolve() / "/".join([ str(entity[x]) for x in  [
+       			"machine_type" ,"configuration", "suite", "benchmark", "platform_type", "repository",
+          		"platform_installation", "version", "filename"]])),
 		})
 
 	df = pd.DataFrame(entities)
@@ -72,7 +78,7 @@ def save_meta(input_folder :Path, output_file:Path) -> pd.DataFrame:
 
 	return df
 
-def run(args : argparse.Namespace, meta_data: pd.DataFrame, output_folder: Path, year_month: str) -> None:
+def run(args : argparse.Namespace, meta_data: pd.DataFrame, output_folder: Path) -> None:
 	"""_summary_
 		Copy given combinations selected in args from meta data to the output folder with a new name relevant to time.
   
@@ -99,9 +105,9 @@ def run(args : argparse.Namespace, meta_data: pd.DataFrame, output_folder: Path,
 		if prompt == "y" or prompt == "yes" or prompt == "ano":
 			records = data.to_dict('records')
 			for record in records:
-				exact_path = output_folder / f"{'/'.join([str(record[x]) for x in identifiers])}" / year_month
-				exact_path.mkdir(parents=True, exist_ok=True)
-				shutil.copyfile(f"{record['path']}/default.csv", exact_path / f"{record['id']}.csv")		
+				parent_path = Path(record['extracted_path']).parent
+				parent_path.mkdir(parents=True, exist_ok=True)
+				shutil.copyfile(record["source_path"], record["extracted_path"])		
 		else:
 			print ("OK")
 	else:
@@ -124,7 +130,7 @@ def extract(args : argparse.Namespace) -> None:
 	meta_data = save_meta (input_folder, file_name)
     
 	if args.extract:
-		run(args, meta_data, output_folder , year_month)
+		run(args, meta_data, output_folder)
 	else:
 		print (f"The meta data from the folder is loaded")
 		print ("use the -x or --extract attribute and specify the followings:")
