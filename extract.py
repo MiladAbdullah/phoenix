@@ -1,10 +1,91 @@
 import argparse
+import math
 import pandas as pd
 from pathlib import Path
+from multiprocessing import Process, Manager
 import shutil
 import json
+from typing import Any
+# local packages
+from warm_up import warmUp
 
-def save_meta(input_folder :Path, output_file: Path) -> pd.DataFrame:
+def read_json (address):
+	with open(address, "r") as json_file:
+		return json.loads(json_file.read())
+
+class MetaData:
+	machine_types : dict
+	machine_hosts : dict
+	benchmarks: dict
+	suites: dict
+	configurations: dict
+	repositories: dict
+	installations: dict
+	platform_types: dict
+	versions: dict
+ 
+	def __init__(self, input_folder: Path) -> None:
+		self.machine_types = {int(k):v['name'] for k,v in read_json(input_folder / "machine_type/metadata").items()}
+		self.machine_hosts = {int(k):v['type'] for k,v in read_json(input_folder / "machine_host/metadata").items()}
+		self.configurations = {int(k):v['name'] for k,v in read_json(input_folder / "configuration/metadata").items()}
+		self.suites = {int(k):v['name'] for k,v in read_json(input_folder / "benchmark_type/metadata").items()}
+		self.platform_types = {int(k):v['name'] for k,v in read_json(input_folder / "platform_type/metadata").items()}
+		self.repositories = {int(k):v['name'] for k,v in read_json(input_folder / "repository/metadata").items()}
+		self.benchmarks = {int(k):v for k,v in read_json(input_folder / "benchmark_workload/metadata").items()}
+		self.installations= {int(k):v for k,v in read_json(input_folder / "platform_installation/metadata").items()}
+		self.versions= {int(k):v for k,v in read_json(input_folder / "version/metadata").items()}
+  
+
+def process_safe_data_extractor (meta_data_parallel: list, shared_list: Any, info: MetaData, output_file: Path) -> None:
+	entities = []	
+	for meta_data in meta_data_parallel:
+		
+		meta_dict = read_json(meta_data)
+		source_path = str(meta_data.parent.resolve() / "default.csv")
+		data = pd.read_csv(source_path)
+
+		if data.size == 0:
+			continue
+
+		entity = {
+			'machine_type': info.machine_hosts[meta_dict['machine_host']],
+			'machine_type_name': info.machine_types[info.machine_hosts[meta_dict['machine_host']]],
+			'machine_host': meta_dict['machine_host'],
+
+			'suite': info.benchmarks[meta_dict['benchmark_workload']]['type'],
+			'suite_name': info.suites[info.benchmarks[meta_dict['benchmark_workload']]['type']],
+			'benchmark': meta_dict['benchmark_workload'],
+			'benchmark_name': info.benchmarks[meta_dict['benchmark_workload']]['name'],
+
+			'configuration': meta_dict['configuration'],
+			'configuration_name': info.configurations[meta_dict['configuration']],
+
+			'platform_type': info.installations[meta_dict['platform_installation']]['type'],
+			'platform_type_name':info.platform_types[info.installations[meta_dict['platform_installation']]['type']],
+			'platform_installation': meta_dict['platform_installation'],
+			'repository': info.versions[info.installations[meta_dict['platform_installation']]['version']]['repository'],
+			'repository_name': info.repositories[info.versions[
+				info.installations[meta_dict['platform_installation']]['version']]['repository']],
+			'version': info.installations[meta_dict['platform_installation']]['version'],
+			'version_time':info.versions[info.installations[meta_dict['platform_installation']]['version']]['time'],
+			'version_hash':info.versions[info.installations[meta_dict['platform_installation']]['version']]['hash'],
+			"filename": str(meta_data).split('/')[-2] + ".csv",
+			'id':str(meta_data).split('/')[-2],
+			'source_path':source_path,
+		}
+		entities.append({
+			**entity,
+			'extracted_path': str(output_file.parent.resolve() / "/".join([ str(entity[x]) for x in  [
+				"machine_type" ,"configuration", "suite", "benchmark", "platform_type", "repository",
+				"platform_installation", "version", "filename"]])),
+			"warmup_index": warmUp(data)["warmup.index"],
+		})
+
+	shared_list.append(pd.DataFrame(entities))
+    
+
+
+def save_meta(input_folder :Path, output_file: Path, process_count: int, use_profile: bool = False) -> pd.DataFrame:
 	"""_summary_
 		Greedily goes through all files that exists in input folder and finds all configurations and benchmarks
 		that exist.
@@ -18,65 +99,43 @@ def save_meta(input_folder :Path, output_file: Path) -> pd.DataFrame:
  
 	if output_file.exists():
 		return pd.read_csv(output_file)
+	
+	profile = None
+	if use_profile:
+		import cProfile
+		profile = cProfile.Profile()
+		profile.enable()
+  
+	all_meta_data = [x for x in (input_folder / "measurement").glob('**/metadata')]
+ 
+	chunk_size = math.ceil(len(all_meta_data) / process_count)
+ 	
+	with Manager() as manager:
+		shared_list = manager.list()
+		processes = [ Process(target=process_safe_data_extractor,
+						args=(
+							all_meta_data[i:min(i+chunk_size, len(all_meta_data))],
+							shared_list,
+							MetaData(input_folder),
+							output_file,
+							)) 
+				for i in range(0, chunk_size*process_count, chunk_size)
+    	]
 
-	def read_json (address):
-		with open(address, "r") as json_file:
-			return json.loads(json_file.read())
+		for p in processes:
+			p.start()
+	
+		for p in processes:
+			p.join()
+		
+		if profile:
+			profile.disable()
+			profile.print_stats()
 
-	suites = {int(k):v['name'] for k,v in read_json(input_folder / "benchmark_type/metadata").items()}
-	configurations = {int(k):v['name'] for k,v in read_json(input_folder / "configuration/metadata").items()}
-	machine_types = {int(k):v['name'] for k,v in read_json(input_folder / "machine_type/metadata").items()}
-	platform_types = {int(k):v['name'] for k,v in read_json(input_folder / "platform_type/metadata").items()}
-	repositories = {int(k):v['name'] for k,v in read_json(input_folder / "repository/metadata").items()}
+		all_frames = pd.concat(shared_list)
+		all_frames.to_csv(output_file, index=False)
 
-
-	benchmarks = {int(k):v for k,v in read_json(input_folder / "benchmark_workload/metadata").items()}
-	machine_hosts = {int(k):v['type'] for k,v in read_json(input_folder / "machine_host/metadata").items()}
-	installations= {int(k):v for k,v in read_json(input_folder / "platform_installation/metadata").items()}
-	versions= {int(k):v for k,v in read_json(input_folder / "version/metadata").items()}
-
-	all_meta_data = (input_folder / "measurement").glob('**/metadata')
-	entities = []
-	for meta_data in all_meta_data:
-		meta_dict = read_json(meta_data)
-
-		entity = {
-			'machine_type': machine_hosts[meta_dict['machine_host']],
-			'machine_type_name': machine_types[machine_hosts[meta_dict['machine_host']]],
-			'machine_host': meta_dict['machine_host'],
-
-			'suite': benchmarks[meta_dict['benchmark_workload']]['type'],
-			'suite_name': suites[benchmarks[meta_dict['benchmark_workload']]['type']],
-			'benchmark': meta_dict['benchmark_workload'],
-			'benchmark_name': benchmarks[meta_dict['benchmark_workload']]['name'],
-
-			'configuration': meta_dict['configuration'],
-			'configuration_name': configurations[meta_dict['configuration']],
-
-			'platform_type': installations[meta_dict['platform_installation']]['type'],
-			'platform_type_name':platform_types[installations[meta_dict['platform_installation']]['type']],
-			'platform_installation': meta_dict['platform_installation'],
-			'repository': versions[installations[meta_dict['platform_installation']]['version']]['repository'],
-			'repository_name': repositories[versions[
-				installations[meta_dict['platform_installation']]['version']]['repository']],
-			'version': installations[meta_dict['platform_installation']]['version'],
-			'version_time':versions[installations[meta_dict['platform_installation']]['version']]['time'],
-			'version_hash':versions[installations[meta_dict['platform_installation']]['version']]['hash'],
-			"filename": str(meta_data).split('/')[-2] + ".csv",
-   			'id':str(meta_data).split('/')[-2],
-			'source_path':str(meta_data.parent.resolve() / "default.csv"),
-		}
-		entities.append({
-			**entity,
-			'extracted_path': str(output_file.parent.resolve() / "/".join([ str(entity[x]) for x in  [
-       			"machine_type" ,"configuration", "suite", "benchmark", "platform_type", "repository",
-          		"platform_installation", "version", "filename"]])),
-		})
-
-	df = pd.DataFrame(entities)
-	df.to_csv(output_file, index=False)
-
-	return df
+		return all_frames
 
 def run(args : argparse.Namespace, meta_data: pd.DataFrame, output_folder: Path) -> None:
 	"""_summary_
@@ -127,14 +186,15 @@ def extract(args : argparse.Namespace) -> None:
     
 	year_month = str(input_folder).split('/')[-1]	
 	file_name = output_folder / f"{year_month}_metadata.csv"
-	meta_data = save_meta (input_folder, file_name)
+	meta_data = save_meta (input_folder, file_name, args.process_count ,args.profile)
     
 	if args.extract:
 		run(args, meta_data, output_folder)
 	else:
 		print (f"The meta data from the folder is loaded")
 		print ("use the -x or --extract attribute and specify the followings:")
-		identifiers = [k for k,v in args.__dict__.items() if isinstance(v,int) and not isinstance(v, bool)]
+		identifiers = [ k for k,v in args.__dict__.items()
+                 if isinstance(v,int) and not isinstance(v, bool) and not k == "process_count" ]
 		
 		current_meta_data = meta_data
   
@@ -172,7 +232,10 @@ def main():
     parser.add_argument('-p', '--platform_installation', type=int, help='Platform Installation ID', default=0)
     parser.add_argument('-v', '--version', type=int, help='Version ID', default=0)
     parser.add_argument('-o', '--output', type=str, help='output folder', default="extracted")
-
+    
+    parser.add_argument('-n', '--process_count', type=int, help='number of parallel processes', default=32)
+    parser.add_argument('-f', '--profile', action=argparse.BooleanOptionalAction, default=False)
+    
     args = parser.parse_args()
     extract(args)
 
