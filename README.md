@@ -161,7 +161,7 @@ The above command will load/copy 2717 runs for all machine type where `id=5`, al
 
 To specify another folder to write in use argument `-o` or `--output`. For always `yes` use the command with `-y` or `--yes`.
 
-Since we are saving the data regarding the warm-up, and it requires a lot of time to process the data, we have enabled parallel processes in the script. If the number of processes is not defined it will run on 4 processes; however, to control the number of processes, please use `-n` or `--process_count`.
+Since we are saving the data regarding the warm-up, and it requires a lot of time to process the data, we have enabled parallel processes in the script. If the number of processes is not defined it will run on 32 processes; however, to control the number of processes, please use `-n` or `--process_count`.
 
 In case more information is required from the code analysis, it is possible to use the default python profiler. Simply run the experiment with `-f` or `profile`. 
 
