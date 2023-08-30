@@ -5,13 +5,26 @@ from pathlib import Path
 from multiprocessing import Process, Manager
 import shutil
 import json
-from typing import Any
+from typing import Any		
+import cProfile
+
 # local packages
-from warm_up import warmUp
+from warm_up import clean as clean_and_warmup
 
 def read_json (address):
 	with open(address, "r") as json_file:
 		return json.loads(json_file.read())
+
+IDENTIFIERS = {
+	'machine_type': {'short_form':'m', 'description':"Machine Type ID"},
+ 	'configuration': {'short_form':'c', 'description':"Configuration ID"},
+  	'suite': {'short_form':'s', 'description':"Benchmark Suite ID"},
+   	'benchmark': {'short_form':'b', 'description':"Benchmark ID"},
+    'platform_type': {'short_form':'t', 'description':"Version Platform ID"},
+    'repository': {'short_form':'r', 'description':"Version Repository ID"},
+    'platform_installation': {'short_form':'p', 'description':"Version Platform Installation ID"},
+    'version': {'short_form':'v', 'description':"Version ID"},
+}
 
 class MetaData:
 	machine_types : dict
@@ -42,10 +55,10 @@ def process_safe_data_extractor (meta_data_parallel: list, shared_list: Any, inf
 		
 		meta_dict = read_json(meta_data)
 		source_path = str(meta_data.parent.resolve() / "default.csv")
-		data = pd.read_csv(source_path)
+		#data = pd.read_csv(source_path)
 
-		if data.size == 0:
-			continue
+		# if data.size == 0:
+		# 	continue
 
 		entity = {
 			'machine_type': info.machine_hosts[meta_dict['machine_host']],
@@ -78,7 +91,7 @@ def process_safe_data_extractor (meta_data_parallel: list, shared_list: Any, inf
 			'extracted_path': str(output_file.parent.resolve() / "/".join([ str(entity[x]) for x in  [
 				"machine_type" ,"configuration", "suite", "benchmark", "platform_type", "repository",
 				"platform_installation", "version", "filename"]])),
-			"warmup_index": warmUp(data)["warmup.index"],
+			#"warmup_index": warmUp(data)["warmup.index"],
 		})
 
 	shared_list.append(pd.DataFrame(entities))
@@ -102,7 +115,6 @@ def save_meta(input_folder :Path, output_file: Path, process_count: int, use_pro
 	
 	profile = None
 	if use_profile:
-		import cProfile
 		profile = cProfile.Profile()
 		profile.enable()
   
@@ -137,6 +149,46 @@ def save_meta(input_folder :Path, output_file: Path, process_count: int, use_pro
 
 		return all_frames
 
+
+def copy_file (records: dict, warm_up:bool) -> None:
+    for record in records:
+        shutil.copyfile(record["source_path"], record["extracted_path"])
+        if warm_up:
+            copied_path = Path() / record["extracted_path"]
+            data = pd.read_csv(copied_path)
+            if data.size > 0:
+                data = clean_and_warmup(data)
+                data.to_csv(copied_path.parent / f"{copied_path.stem}_cleaned.csv", index=False)
+		
+
+def save_actual_files(args : argparse.Namespace, records: dict) -> None:
+    profile = None
+    if args.profile:
+        profile = cProfile.Profile()
+        profile.enable()
+	
+    process_records = {i:[] for i in range(args.process_count)}
+    i = 0
+    for record in records:
+        parent_path = Path(record['extracted_path']).parent
+        parent_path.mkdir(parents=True, exist_ok=True)
+        process_records[i].append(record)
+        i = (i+1) % args.process_count
+    
+    processes = []
+    processes = [ Process(target=copy_file, args=(record, args.warm_up)) for _,record in process_records.items()]
+
+    for p in processes:
+        p.start()
+    
+    for p in processes:
+        p.join()
+      
+    if profile:
+        profile.disable()
+        profile.print_stats()
+   
+
 def run(args : argparse.Namespace, meta_data: pd.DataFrame, output_folder: Path) -> None:
 	"""_summary_
 		Copy given combinations selected in args from meta data to the output folder with a new name relevant to time.
@@ -147,26 +199,22 @@ def run(args : argparse.Namespace, meta_data: pd.DataFrame, output_folder: Path)
 		output_folder (Path): The target folder for extracting the measurements.
 		year_month (str): the year_month indication of the database file.
 	"""
-    
-	identifiers = [k for k,v in args.__dict__.items() if isinstance(v,int) and not isinstance(v, bool)]
+
 	data = meta_data
-	for identifier in identifiers:
+	for identifier in IDENTIFIERS.keys():
 		value = args.__dict__[identifier]
 		if value <= 0:
 			continue
 		data = data[data[identifier]==value]
-	
-	if data.size > 0:
+  	
+	records = data.to_dict('records')
+	if len(records) > 0:
 		if not args.yes:
-			prompt = input(f"Are you sure to extract {data.size} measurements? [y/N]: ").lower()
+			prompt = input(f"Are you sure to extract {len(records)} measurements? [y/N]: ").lower()
 		else:
 			prompt = "y"
 		if prompt == "y" or prompt == "yes" or prompt == "ano":
-			records = data.to_dict('records')
-			for record in records:
-				parent_path = Path(record['extracted_path']).parent
-				parent_path.mkdir(parents=True, exist_ok=True)
-				shutil.copyfile(record["source_path"], record["extracted_path"])		
+			save_actual_files(args=args, records=records)
 		else:
 			print ("OK")
 	else:
@@ -193,24 +241,22 @@ def extract(args : argparse.Namespace) -> None:
 	else:
 		print (f"The meta data from the folder is loaded")
 		print ("use the -x or --extract attribute and specify the followings:")
-		identifiers = [ k for k,v in args.__dict__.items()
-                 if isinstance(v,int) and not isinstance(v, bool) and not k == "process_count" ]
 		
 		current_meta_data = meta_data
   
 		# filter out the data
-		for identifier in identifiers:
+		for identifier in IDENTIFIERS.keys():
 			value = args.__dict__[identifier]
 			if value > 0:
 				current_meta_data = current_meta_data[current_meta_data[identifier]==value]	
-    			
-		if current_meta_data.size == 0:
+
+		if len(current_meta_data.index) == 0:
 			print (f"No measurement was found, try the following filters:\n")
 			current_meta_data = meta_data
 		else:
-			print (f"\nFound {current_meta_data.size} measurements.\n")
+			print (f"\nFound {len(current_meta_data.index)} measurements.\n")
         
-		for identifier in identifiers:
+		for identifier in IDENTIFIERS.keys():
 			uniques = current_meta_data[identifier].unique()
 			print (f"--{identifier}: {[u for u in uniques[:min(10,len(uniques))]]}{'...' if len(uniques) > 10 else ''}")
 		
@@ -223,19 +269,17 @@ def main():
     parser.add_argument('-x', '--extract', action=argparse.BooleanOptionalAction, help='extract', default=False)
     parser.add_argument('-y', '--yes', action=argparse.BooleanOptionalAction, help='confirm extracting', default=False)
     
-    parser.add_argument('-m', '--machine_type', type=int, help='Machine Type ID.', default=0)
-    parser.add_argument('-c', '--configuration', type=int, help='Configuration ID', default=0)
-    parser.add_argument('-s', '--suite', type=int, help='Benchmark Suite ID', default=0)
-    parser.add_argument('-b', '--benchmark', type=int, help='Benchmark ID', default=0)
-    parser.add_argument('-t', '--platform_type', type=int, help='Platform Type ID', default=0)
-    parser.add_argument('-r', '--repository', type=int, help='repositories ID', default=0)
-    parser.add_argument('-p', '--platform_installation', type=int, help='Platform Installation ID', default=0)
-    parser.add_argument('-v', '--version', type=int, help='Version ID', default=0)
     parser.add_argument('-o', '--output', type=str, help='output folder', default="extracted")
     
+    parser.add_argument('-w', '--warm-up', action=argparse.BooleanOptionalAction, default=False)
     parser.add_argument('-n', '--process_count', type=int, help='number of parallel processes', default=32)
     parser.add_argument('-f', '--profile', action=argparse.BooleanOptionalAction, default=False)
     
+    for key, argument in IDENTIFIERS.items():
+        parser.add_argument(f"-{argument['short_form']}", f"--{key}", type=int, help=argument['description'], default=0)
+        
+     
+
     args = parser.parse_args()
     extract(args)
 
