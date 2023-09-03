@@ -10,21 +10,24 @@ import cProfile
 
 # local packages
 from warm_up import clean as clean_and_warmup
+from fetch import collect_bootstrap_data
 
 def read_json (address):
 	with open(address, "r") as json_file:
 		return json.loads(json_file.read())
 
 IDENTIFIERS = {
-	'machine_type': {'short_form':'m', 'description':"Machine Type ID"},
- 	'configuration': {'short_form':'c', 'description':"Configuration ID"},
-  	'suite': {'short_form':'s', 'description':"Benchmark Suite ID"},
-   	'benchmark': {'short_form':'b', 'description':"Benchmark ID"},
-    'platform_type': {'short_form':'t', 'description':"Version Platform ID"},
-    'repository': {'short_form':'r', 'description':"Version Repository ID"},
-    'platform_installation': {'short_form':'p', 'description':"Version Platform Installation ID"},
-    'version': {'short_form':'v', 'description':"Version ID"},
+	'machine_type': 			{'short_form':'m', 'description':"Machine Type ID"},
+ 	'configuration': 			{'short_form':'c', 'description':"Configuration ID"},
+  	'suite': 					{'short_form':'s', 'description':"Benchmark Suite ID"},
+   	'benchmark': 				{'short_form':'b', 'description':"Benchmark ID"},
+    'platform_type': 			{'short_form':'t', 'description':"Version Platform ID"},
+    'repository': 				{'short_form':'r', 'description':"Version Repository ID"},
+    'platform_installation': 	{'short_form':'p', 'description':"Version Platform Installation ID"},
+    'version': 					{'short_form':'v', 'description':"Version ID"},
 }
+
+
 
 class MetaData:
 	machine_types : dict
@@ -49,16 +52,42 @@ class MetaData:
 		self.versions= {int(k):v for k,v in read_json(input_folder / "version/metadata").items()}
   
 
-def process_safe_data_extractor (meta_data_parallel: list, shared_list: Any, info: MetaData, output_file: Path) -> None:
+
+def diff_fetcher(input_df: pd.DataFrame, shared_list: Any, target_column: str) -> pd.DataFrame:
+    shared_list.append(collect_bootstrap_data(input_df, target_column))
+    
+def save_diff(args : argparse.Namespace, output_file: Path, meta_data: pd.DataFrame) -> None:
+    
+    if output_file.exists():
+        return pd.read_csv(output_file)
+    
+    chunk_size = math.ceil(len(meta_data) / args.process_count)
+    with Manager() as manager:
+        shared_list = manager.list()
+        processes = [ Process(target=diff_fetcher,
+						args=(
+							meta_data[i:min(i+chunk_size, len(meta_data))],
+							shared_list,
+							args.target_column
+							))
+
+				for i in range(0, chunk_size*args.process_count, chunk_size)
+    	]
+        for p in processes:
+            p.start()
+        
+        for p in processes:
+            p.join()
+            
+        all_frames = pd.concat(shared_list)
+        all_frames.to_csv(output_file, index=False)
+
+def data_extractor(meta_list: list, shared_list: Any, info: MetaData, output_file: Path) -> None:
 	entities = []	
-	for meta_data in meta_data_parallel:
+	for meta_data in meta_list:
 		
 		meta_dict = read_json(meta_data)
 		source_path = str(meta_data.parent.resolve() / "default.csv")
-		#data = pd.read_csv(source_path)
-
-		# if data.size == 0:
-		# 	continue
 
 		entity = {
 			'machine_type': info.machine_hosts[meta_dict['machine_host']],
@@ -86,52 +115,42 @@ def process_safe_data_extractor (meta_data_parallel: list, shared_list: Any, inf
 			'id':str(meta_data).split('/')[-2],
 			'source_path':source_path,
 		}
+		
 		entities.append({
 			**entity,
 			'extracted_path': str(output_file.parent.resolve() / "/".join([ str(entity[x]) for x in  [
 				"machine_type" ,"configuration", "suite", "benchmark", "platform_type", "repository",
 				"platform_installation", "version", "filename"]])),
-			#"warmup_index": warmUp(data)["warmup.index"],
 		})
 
 	shared_list.append(pd.DataFrame(entities))
     
 
 
-def save_meta(input_folder :Path, output_file: Path, process_count: int, use_profile: bool = False) -> pd.DataFrame:
-	"""_summary_
-		Greedily goes through all files that exists in input folder and finds all configurations and benchmarks
-		that exist.
-	Args:
-		input_folder (Path): The path to the input folder.
-		output_file (Path): the path to the output file.
+def save_meta(args : argparse.Namespace, input_folder :Path, output_file: Path) -> pd.DataFrame:
 
-	Returns:
-		pd.DataFrame: A CSV file consisting of the meta data extracted from given folder.
-	"""
- 
 	if output_file.exists():
 		return pd.read_csv(output_file)
 	
 	profile = None
-	if use_profile:
+	if args.profile:
 		profile = cProfile.Profile()
 		profile.enable()
   
 	all_meta_data = [x for x in (input_folder / "measurement").glob('**/metadata')]
  
-	chunk_size = math.ceil(len(all_meta_data) / process_count)
+	chunk_size = math.ceil(len(all_meta_data) / args.process_count)
  	
 	with Manager() as manager:
 		shared_list = manager.list()
-		processes = [ Process(target=process_safe_data_extractor,
+		processes = [ Process(target=data_extractor,
 						args=(
 							all_meta_data[i:min(i+chunk_size, len(all_meta_data))],
 							shared_list,
 							MetaData(input_folder),
 							output_file,
 							)) 
-				for i in range(0, chunk_size*process_count, chunk_size)
+				for i in range(0, chunk_size*args.process_count, chunk_size)
     	]
 
 		for p in processes:
@@ -233,9 +252,11 @@ def extract(args : argparse.Namespace) -> None:
 	output_folder.mkdir(parents=True, exist_ok=True)
     
 	year_month = str(input_folder).split('/')[-1]	
-	file_name = output_folder / f"{year_month}_metadata.csv"
-	meta_data = save_meta (input_folder, file_name, args.process_count ,args.profile)
-    
+
+	meta_data = save_meta (args, input_folder, output_folder / f"{year_month}_metadata.csv")
+	if args.difference:
+		save_diff (args, output_folder  / f"{year_month}_metadiff.csv", meta_data)
+
 	if args.extract:
 		run(args, meta_data, output_folder)
 	else:
@@ -260,13 +281,12 @@ def extract(args : argparse.Namespace) -> None:
 			uniques = current_meta_data[identifier].unique()
 			print (f"--{identifier}: {[u for u in uniques[:min(10,len(uniques))]]}{'...' if len(uniques) > 10 else ''}")
 		
-		
-            
 
 def main():
     parser = argparse.ArgumentParser(description='Compute the GRAAL data')
     parser.add_argument('input_folder', type=str, help='input folder')
     parser.add_argument('-x', '--extract', action=argparse.BooleanOptionalAction, help='extract', default=False)
+    parser.add_argument('-d', '--difference', action=argparse.BooleanOptionalAction, help='download differences ', default=False)
     parser.add_argument('-y', '--yes', action=argparse.BooleanOptionalAction, help='confirm extracting', default=False)
     
     parser.add_argument('-o', '--output', type=str, help='output folder', default="extracted")
@@ -274,11 +294,10 @@ def main():
     parser.add_argument('-w', '--warm-up', action=argparse.BooleanOptionalAction, default=False)
     parser.add_argument('-n', '--process_count', type=int, help='number of parallel processes', default=32)
     parser.add_argument('-f', '--profile', action=argparse.BooleanOptionalAction, default=False)
+    parser.add_argument('-g', '--target_column',  type=str, default="iteration_time_ns")
     
     for key, argument in IDENTIFIERS.items():
         parser.add_argument(f"-{argument['short_form']}", f"--{key}", type=int, help=argument['description'], default=0)
-        
-     
 
     args = parser.parse_args()
     extract(args)
