@@ -161,6 +161,35 @@ The above command will load/copy 2717 runs for all machine type where `id=5`, al
 
 To specify another folder to write in use argument `-o` or `--output`. For always `yes` use the command with `-y` or `--yes`.
 
+
+To store the cleaned measurements (without warm-up and outliers), use `-w` or `warm-up`. This allow to creating a version of the measurement with `clean` prefix.
+
+By using `-d` or `--difference` and setting target column using `-g` `--target_column` (which is set to 'iteration_time_ns' by default), it is possible to download the related differences.
+
+Assuming `old` and `new` are the both compared versions, the difference will be stored as a meta file with the following columns:
+- id: (`int`) shows the id of the difference.
+- name: (`str`) shows the name of the difference.
+- machine_type: (`int`) shows the name of the difference.
+- configuration: (`int`) shows the id of the compiler configuration.
+- platform_type: (`int`) shows the id of the platform installation type (of new).
+- benchmark: (`int`) shows the id of benchmark workload.
+- platform_installation_old: (`int`) shows the id of platform installation of old version.
+- platform_installation_new: (`int`) shows the id of platform installation of new version.
+- version_old: (`int`) shows the id of old version.
+- version_new: (`int`) shows the id of new version.
+- version_old_time: (`datetime`) shows the the installation time of the old version.
+- version_new_time: (`datetime`) shows the the installation time of the old version.
+- count_old: (`int`) shows the number of used runs for old version measurements.
+- count_new: (`int`) shows the number of used runs for new version measurements.
+- p_value: (`float`) shows the p-value for normal distribution with zero mean.
+- neg_log_p_value: (`float`) shows the negative logarithm of p-value (which is the number of leading zeros).
+- size_effect: (`float`) shows the size effect of the difference.
+- regression: (`bool`) shows whether there was a performance regression or not.
+
+```command-line
+python extract.py downloads/2022-01 -d -w -x
+```
+
 Since we are saving the data regarding the warm-up, and it requires a lot of time to process the data, we have enabled parallel processes in the script. If the number of processes is not defined it will run on 32 processes; however, to control the number of processes, please use `-n` or `--process_count`.
 
 In case more information is required from the code analysis, it is possible to use the default python profiler. Simply run the experiment with `-f` or `profile`. 
