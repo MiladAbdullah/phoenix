@@ -171,8 +171,9 @@ Assuming `old` and `new` are the both compared versions, the difference will be 
 - name: (`str`) shows the name of the difference.
 - machine_type: (`int`) shows the name of the difference.
 - configuration: (`int`) shows the id of the compiler configuration.
-- platform_type: (`int`) shows the id of the platform installation type (of new).
 - benchmark: (`int`) shows the id of benchmark workload.
+- run_id_old: (`slag`) shows the run id of old version.
+- run_id_new: (`slag`) shows the run id of new version.
 - platform_installation_old: (`int`) shows the id of platform installation of old version.
 - platform_installation_new: (`int`) shows the id of platform installation of new version.
 - version_old: (`int`) shows the id of old version.
