@@ -31,7 +31,7 @@ source env/bin/activate
 After this step the command line should start with `(env)`. Now new packages can be installed, for example:
 
 ```command-line
-pip install pandas ipython numpy
+pip install pandas ipython numpy requests
 ```
 
 To install all packages required, run all there is from `requirements.txt` by:
