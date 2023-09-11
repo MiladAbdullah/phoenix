@@ -53,20 +53,21 @@ class MetaData:
   
 
 
-def diff_fetcher(input_df: pd.DataFrame, shared_list: Any, target_column: str) -> pd.DataFrame:
-    shared_list.append(collect_bootstrap_data(input_df, target_column))
+def diff_fetcher(input_list: list, shared_list: Any, target_column: str) -> pd.DataFrame:
+    shared_list.append(collect_bootstrap_data(input_list, target_column))
     
 def save_diff(args : argparse.Namespace, output_file: Path, meta_data: pd.DataFrame) -> None:
     
     if output_file.exists():
         return pd.read_csv(output_file)
     
-    chunk_size = math.ceil(len(meta_data) / args.process_count)
+    run_ids = meta_data.run_id.unique()
+    chunk_size = math.ceil(len(run_ids) / args.process_count)
     with Manager() as manager:
         shared_list = manager.list()
         processes = [ Process(target=diff_fetcher,
 						args=(
-							meta_data[i:min(i+chunk_size, len(meta_data))],
+							run_ids[i:min(i+chunk_size, len(run_ids))],
 							shared_list,
 							args.target_column
 							))
@@ -117,7 +118,8 @@ def data_extractor(meta_list: list, shared_list: Any, info: MetaData, output_fil
 		}
 		
 		entities.append({
-			**entity,
+			"run_id": f"{entity['machine_type']}-{entity['configuration']}-{entity['benchmark']}-{entity['version']}",
+   			**entity,
 			'extracted_path': str(output_file.parent.resolve() / "/".join([ str(entity[x]) for x in  [
 				"machine_type" ,"configuration", "suite", "benchmark", "platform_type", "repository",
 				"platform_installation", "version", "filename"]])),
