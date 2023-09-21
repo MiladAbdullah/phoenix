@@ -88,4 +88,24 @@ def collect_bootstrap_data(run_ids: list, target_column: str = "iteration_time_n
                         
                     })
 
-    return pd.DataFrame(data=recorded_bootstraps)
+    return pd.DataFrame(data=recorded_bootstraps, columns=[
+        "id",
+        "name",
+        "machine_type",
+        "configuration",
+        "benchmark",
+        "run_id_old",
+        "run_id_new",
+        "platform_installation_old",
+        "platform_installation_new",
+        "version_old",
+        "version_new",
+        "version_old_time",
+        "version_new_time",
+        "count_old",
+        "count_new",
+        "p_value",
+        "neg_log_p_value",
+        "size_effect",
+        "regression",
+    ])
