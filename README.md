@@ -13,7 +13,7 @@ To download python 3 on a Ubuntu perform the following commands:
 
 ```command-line
 sudo apt update && sudo apt upgrade
-sudo apt install python3 python3-venv
+sudo apt install python3 python3-venv python3-pip
 ```
 
 It is recommended to use a virtual environment which helps portability and package management. It also prevent cross-project dependency. To set up a virtual environment, run the following command:
