@@ -23,8 +23,9 @@ def collect_bootstrap_data(run_ids: list, target_column: str = "iteration_time_n
             + f"platform_installation_new__version={version}&"\
             + "extra=platform_installation_new&extra=platform_installation_old&"\
             + "extra=platform_installation_new__version&extra=platform_installation_old__version&" \
-            + "extra=platform_installation_new__version__time&extra=platform_installation_old__version__time"
-
+            + "extra=platform_installation_new__version__time&extra=platform_installation_old__version__time&" \
+            + "extra=platform_installation_new__type&extra=platform_installation_old__type"
+        
         data_record = requests.get(data_url)
         if data_record.status_code == 200:
             try:
@@ -75,6 +76,8 @@ def collect_bootstrap_data(run_ids: list, target_column: str = "iteration_time_n
                         "run_id_new": f"{'-'.join(run_id_parts[:3])}-{json_elements['platform_installation_new__version']}",
                         "platform_installation_old": json_elements["platform_installation_old"],
                         "platform_installation_new": json_elements["platform_installation_new"],
+                        "platform_installation_old_type": json_elements["platform_installation_old__type"],
+                        "platform_installation_new_type": json_elements["platform_installation_new__type"],
                         "version_old": json_elements["platform_installation_old__version"],
                         "version_new": json_elements["platform_installation_new__version"],
                         "version_old_time": json_elements["platform_installation_old__version__time"],
@@ -96,6 +99,8 @@ def collect_bootstrap_data(run_ids: list, target_column: str = "iteration_time_n
         "benchmark",
         "run_id_old",
         "run_id_new",
+        "platform_installation_old_type",
+        "platform_installation_new_type",
         "platform_installation_old",
         "platform_installation_new",
         "version_old",
