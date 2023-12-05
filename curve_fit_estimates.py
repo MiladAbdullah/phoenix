@@ -103,6 +103,8 @@ def estimate_runs_needed_from_dataframe(df, config):
 
 if __name__ == '__main__':
     print("Running")
+    # to get one run (cleaned)
+    #data = pd.read_csv("extracted/5/43/7/137/12/13/34603/71346/7731833_cleaned.csv")
     data = pd.read_csv("extracted/5/43/7/137/12/13/34603/71346/7731833.csv")
 
     config = {
