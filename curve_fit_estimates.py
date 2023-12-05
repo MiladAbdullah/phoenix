@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import glob
 import logging
 import random
 
@@ -7,6 +8,7 @@ import numpy as np
 import pandas as pd
 import scipy
 from scipy import stats
+import itertools
 
 def sensitivity_fit(x, a):
     return a / np.sqrt(np.abs(x))
@@ -101,12 +103,16 @@ def estimate_runs_needed_from_dataframe(df, config):
     values = df[config['column']].to_list()
     return estimate_runs_needed(values, config)
 
-if __name__ == '__main__':
-    print("Running")
-    # to get one run (cleaned)
-    #data = pd.read_csv("extracted/5/43/7/137/12/13/34603/71346/7731833_cleaned.csv")
-    data = pd.read_csv("extracted/5/43/7/137/12/13/34603/71346/7731833.csv")
+def estimate_runs_needed_from_glob_csv(pattern, config):
+    runs = [
+        pd.read_csv(filename)[config['column']].to_list()
+        for filename in glob.iglob(pattern)
+    ]
+    values = list(itertools.chain(*runs))
+    return estimate_runs_needed(values, config)
 
+
+if __name__ == '__main__':
     config = {
         'retries': 100,
         'subset_size': 4,
@@ -115,8 +121,5 @@ if __name__ == '__main__':
         'column': "iteration_time_ns",
     }
 
-    res = estimate_runs_needed_from_dataframe(data, config)
+    res = estimate_runs_needed_from_glob_csv("extracted/5/43/7/137/12/13/34603/71346/*_cleaned.csv", config)
     print(res)
-
-
-
