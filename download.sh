@@ -5,7 +5,11 @@ start=$(pwd)
 cd $1
 echo "Downloading to..."$(pwd)
 
-cd $start
+if [ ! -d $1 ]; then
+        echo "Parameter should be a folder, but $1 is not a folder"
+        exit 1
+fi
+
 
 for month in {01..12}
 do 
@@ -26,3 +30,5 @@ do
 		mv 2021-$month.tar.xz?download=1 2021-$month.tar.xz
 	fi
 done
+
+cd $start
