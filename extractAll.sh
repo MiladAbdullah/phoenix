@@ -14,7 +14,7 @@ fi
 
 start=$(pwd)
 
-for year in 2022
+for year in 2021 2022
 do
 	for month in {01..12}
 	do
@@ -28,8 +28,7 @@ do
 			python3 extract.py \
 	       	     		  -y -w \
 		        	  -d \
-		         	$rawDataPath/$year-$month --extract \
-		       		--benchmark $benchmark --machine_type 6
+		         	$rawDataPath/$year-$month --extract 
 		done
 		rm -r $rawDataPath/$year-$month
 	done
