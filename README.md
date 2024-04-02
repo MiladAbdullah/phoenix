@@ -33,7 +33,7 @@ The simulation runs with selected methods configured and set of parameters in th
 {
     "name": "some name for results",
     "schedule":  "now",
-    "source": "graalvm-data",
+    "source": "$GRAAL_SOURCE",
     "data": {
         "start": "01-01-2017",
         "end": "31-12-2023",
@@ -97,3 +97,88 @@ The simulation runs with selected methods configured and set of parameters in th
     }
 }
 ```
+
+The outline of the project is as following:
+```
+.
+├── downloads
+├── methods
+│   ├── control
+│   │   ├── constant
+│   │   ├── mutations
+│   │   └── peass
+│   ├── frequency
+│   │   ├── commit-type-based
+│   │   ├── computation-based
+│   │   │   └── accurate-modeling
+│   │   ├── constant
+│   │   ├── event-based
+│   │   └── time-based
+│   ├── limit
+│   │   ├── constant
+│   │   └── curve-fit
+│   └── pre-process
+│       ├── discard-iteration-outliers
+│       ├── discard-run-outliers
+│       └── discard-warmup
+├── results
+├── scripts
+├── simulation
+├── source
+└── web
+    ├── graal
+    │   └── migrations
+    ├── interface
+    │   └── migrations
+    └── web
+        └── __pycache__
+```
+
+Before running the `simulation`, the data should be downloaded and imported to the `source` folder. The `graal.sh` script performs such pre-computation and has to be run and finished before running the simulation. The script performs the following steps:
+
+Usage:
+```
+bin/graal.sh <FROM> <TO>
+<FROM>: Month and Year in "mm-yyyy" format
+<To>: Month and Year in "mm-yyyy" format
+```
+
+1. Check if the selected timeline is not already downloaded checking `downloads.log` log. 
+1. Download from GraalVM repository to `GRAAL_DOWNLOADS` (or downloads/ if variable not set).
+1. Extract the CSV files to `GRAAL_SOURCE` (or source/ if variable not set) in the following hierarchy:
+
+    ```
+    $GRAAL_SOURCE/
+    ├── <machine-id-#1>
+    ├── <machine-id-#2>
+    ├── ...
+    ├── <machine-id-#N>
+        ├── <configuration-id-#1>
+        ├── <configuration-id-#2>
+        ├── ...
+        └── <configuration-id-#N>
+            ├── <benchmark-suite-id-#1>
+            ├── <benchmark-suite-id-#2>
+            ├── ...
+            └── <benchmark-suite-id-#N>
+                ├── <benchmark-id-#1>
+                ├── <benchmark-id-#2>
+                ├── ...
+                └── <benchmark-id-#N>
+                    ├── <version-type-id-#1>
+                    ├── <version-type-id-#2>
+                    ├── ...
+                    └── <version-type-id-#N>
+                        ├── <version-id-#1>
+                        ├── <version-id-#2>
+                        ├── ...
+                        └── <version-id-#N>
+                            ├── <measurement-csv-#1>
+                            ├── <measurement-csv-#2>
+                            ├── ...
+                            └── <measurement-csv-#N>
+    ```
+
+1. Populate the `/web/db.sqlite3` with new measurements.
+--------------- 
+[Go back to main README](README.md)
