@@ -1,33 +1,33 @@
 # Replication Package
 
-The new approach involves considering multiple methods to be adjusted in one simulation, and the simulation runs over the entire GraalVM performance testing. 
+
+The approach involves considering multiple [methods](/methods/README.md) to be adjusted in one simulation, and the simulation runs over the entire GraalVM performance testing. Each links to its relevant `README`.
 The methods are in four categories:
 
-1. Defining the pre-process steps (can be multiple with order or none):
-    - Discard Warmup
-    - Discard Iteration Outliers
-    - Discard Run Outliers
+1. Defining the [pre-process](methods/pre-process/README.md) steps (can be multiple with order or none):
+    - [Discard Warmup](methods/pre-process/discard-warmup/README.md)
+    - [Discard Iteration Outliers](methods/pre-process/discard-iteration-outliers/README.md)
+    - [Discard Run Outliers](methods/pre-process/discard-run-outliers/README.md)
 
-1. Defining lower or upper limits (of how many iterations and runs):
-    - Constant 
-    - Curve Fit
+1. Defining lower or upper [limits](methods/limit/README.md) (of how many iterations and runs):
+    - [Constant](methods/limit/constant/README.md)
+    - [Curve Fit](methods/limit/curve-fit/README.md)
 
-1. Defining the frequency of benchmarking:
-    - Constant 
-    - Time Based
-    - Commit Type based
-    - Event based
-    - Computation based:
-        - https://ieeexplore.ieee.org/document/8952290
-
-
-1. Deciding on when to stop measuring
-    - Constant 
-    - PEASS https://ieeexplore.ieee.org/abstract/document/10062395
-    - Mutations https://ieeexplore.ieee.org/abstract/document/10371588
+1. Defining the [frequency](methods/frequency/README.md) of benchmarking:
+    - [Constant](methods/frequency/constant/README.md)
+    - [Time Based](methods/frequency/time-based/README.md)
+    - [Commit Type based](methods/frequency/commit-type-based/README.md)
+    - [Event based](methods/frequency/event-based/README.md)
+    - [Computation based](methods/frequency/computation-based/README.md):
+        -  [Accurate Modeling](methods/frequency/computation-based/accurate-modeling/README.md)
 
 
-The simulation runs with selected methods configured and set of parameters in the config.json
+1. Deciding on how to [control](methods/control/README.md) measuring:
+    - [Constant](methods/control/constant/README.md)
+    - [PEASS](methods/control/peass/README.md)
+    - [Mutations](methods/control/mutations/README.md) 
+
+The simulation runs with selected methods configured and set of parameters in the `simulation/config.json`:
 
 ```json
 {
@@ -42,7 +42,7 @@ The simulation runs with selected methods configured and set of parameters in th
             "configuration": "all",
             "benchmark-suite": "all",
             "version-type": "all",
-            "benchmark": "all",
+            "benchmark": "all"
         }
     },
     "methods": {
@@ -57,39 +57,39 @@ The simulation runs with selected methods configured and set of parameters in th
             "method" : "constant",
             "configuration" : {
                 "min_run": 5,
-                "min_measuring_time": 300,
+                "min_measuring_time": 300
             }
         },
         "upper-limit": {
             "method" : "Curve Fit",
             "configuration" : {
                 "max_run": 100,
-                "max_measuring_time": 300,
+                "max_measuring_time": 300
             }
         },
         "frequency": {
             "method" : "time-based",
             "configuration" : {
-                "schedule" : "--weekly monday",
+                "schedule" : "--weekly monday"
             }
         },
         "control": {
             "method" : "mutations",
             "configuration" : {
                 "train-period": "--cycle 6-month",
-                "test-period": "--cycle 6-month",
+                "test-period": "--cycle 6-month"
             }
-        },
+        }
     },
     "results": {
         "csv": "per-configuration",
         "charts" : "per-simulation",
-        "json": "per-simulation",
+        "json": "per-simulation"
     },
     "web": {
         "activate": "true",
         "host": "localhost",
-        "port": 8008,        
+        "port": 8008        
     },
     "os": {
         "processes": 64,
@@ -180,5 +180,3 @@ bin/graal.sh <FROM> <TO>
     ```
 
 1. Populate the `/web/db.sqlite3` with new measurements.
---------------- 
-[Go back to main README](README.md)
