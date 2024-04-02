@@ -1,0 +1,66 @@
+{
+    "name": "some name for results",
+    "schedule":  "now",
+    "source": "$GRAAL_SOURCE",
+    "data": {
+        "start": "01-01-2017",
+        "end": "31-12-2023",
+        "filter": {
+            "machine-type": 5,
+            "configuration": "all",
+            "benchmark-suite": "all",
+            "version-type": "all",
+            "benchmark": "all"
+        }
+    },
+    "methods": {
+        "pre-process":{
+            "methods": [
+               "discard-warmup",
+                "discard-iteration-outliers",
+                "discard-run-outliers"
+            ]
+        },
+        "lower-limit": {
+            "method" : "constant",
+            "configuration" : {
+                "min_run": 5,
+                "min_measuring_time": 300
+            }
+        },
+        "upper-limit": {
+            "method" : "Curve Fit",
+            "configuration" : {
+                "max_run": 100,
+                "max_measuring_time": 300
+            }
+        },
+        "frequency": {
+            "method" : "time-based",
+            "configuration" : {
+                "schedule" : "--weekly monday"
+            }
+        },
+        "control": {
+            "method" : "mutations",
+            "configuration" : {
+                "train-period": "--cycle 6-month",
+                "test-period": "--cycle 6-month"
+            }
+        }
+    },
+    "results": {
+        "csv": "per-configuration",
+        "charts" : "per-simulation",
+        "json": "per-simulation"
+    },
+    "web": {
+        "activate": "true",
+        "host": "localhost",
+        "port": 8008        
+    },
+    "os": {
+        "processes": 64,
+        "memory": "4G" 
+    }
+}
