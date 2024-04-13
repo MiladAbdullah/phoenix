@@ -38,11 +38,11 @@ The simulation runs with selected methods configured and set of parameters in th
         "start": "01-01-2017",
         "end": "31-12-2023",
         "filter": {
-            "machine-type": 5,
-            "configuration": "all",
-            "benchmark-suite": "all",
-            "version-type": "all",
-            "benchmark": "all"
+            "machine-types": [5, 6],
+            "configurations": [],
+            "benchmark-suites": [],
+            "version-types": [],
+            "benchmarks": []
         }
     },
     "methods": {
@@ -178,5 +178,5 @@ bin/graal.sh <FROM> <TO>
                             ├── ...
                             └── <measurement-csv-#N>
     ```
-
+    the above hierarchy should be kept the same if another database rather than GraalVM has been used.
 1. Populate the `/web/db.sqlite3` with new measurements.
