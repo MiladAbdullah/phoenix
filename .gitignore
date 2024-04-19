@@ -162,6 +162,8 @@ cython_debug/
 
 # Milad Added
 extracted/
+downloads/
+source/
 *.csv
 *.png
 _old_stuff/
