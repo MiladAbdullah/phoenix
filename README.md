@@ -133,50 +133,83 @@ The outline of the project is as following:
     └── web
         └── __pycache__
 ```
+## Setup the environment
+1. set PHOENIX_HOME to the current folder
+    ```bash
+    export PHOENIX_HOME=/your/path/to/phoenix
+    ```
 
+1. Install python3.12 and python3.12-venv, skip if python3.12 is already installed
+    * on linux:
+    ```bash
+    sudo add-apt-repository ppa:deadsnakes/ppa
+    sudo apt update 
+    sudo apt install python3.12
+    ```
+
+1. Create and activate virtual environment
+    ```bash
+    python3.12 -m venv env
+    source env/bin/activate
+    pip install -r requirements.txt
+    ```
+    Keep in mind that the environment should be always active during all scripts. 
+
+1. Setup the database:
+    The measurements are stored locally and their meta data is also stored in a local database. To create the database migrate the changes:
+
+    ```bash
+    cd web
+    python manage.py migrate
+    ```
+
+## Downloading the GraalVM performance measurements
 Before running the `simulation`, the data should be downloaded and imported to the `source` folder. The `graal.sh` script performs such pre-computation and has to be run and finished before running the simulation. The script performs the following steps:
 
 Usage:
 ```
-bin/graal.sh <FROM> <TO>
+scripts/graal.sh <FROM> <TO>
 <FROM>: Month and Year in "mm-yyyy" format
 <To>: Month and Year in "mm-yyyy" format
 ```
 
 1. Check if the selected timeline is not already downloaded checking `downloads.log` log. 
-1. Download from GraalVM repository to `GRAAL_DOWNLOADS` (or downloads/ if variable not set).
-1. Extract the CSV files to `GRAAL_SOURCE` (or source/ if variable not set) in the following hierarchy:
+1. Download from GraalVM repository to `$DOWNLOADS` (or `downloads/` if variable not set).
+1. Extract the CSV files to `$GRAAL_SOURCE` (or `source/` if variable not set) in the following hierarchy:
 
     ```
     $GRAAL_SOURCE/
-    ├── <machine-id-#1>
-    ├── <machine-id-#2>
+    ├── <machine-type-id-#1>
+    ├── <machine-type-id-#2>
     ├── ...
-    ├── <machine-id-#N>
+    ├── <machine-type-id-#N>
         ├── <configuration-id-#1>
         ├── <configuration-id-#2>
         ├── ...
         └── <configuration-id-#N>
-            ├── <benchmark-suite-id-#1>
-            ├── <benchmark-suite-id-#2>
+            ├── <benchmark-workload-id-#1>
+            ├── <benchmark-workload-id-#2>
             ├── ...
-            └── <benchmark-suite-id-#N>
-                ├── <benchmark-id-#1>
-                ├── <benchmark-id-#2>
+            └── <benchmark-workload-id-#N>
+                ├── iteration_time_ns_diffs.csv    // ground truth for given configuration
+                ├── <platform-installation-id-#1>
+                ├── <platform-installation-id-#2>
                 ├── ...
-                └── <benchmark-id-#N>
-                    ├── <version-type-id-#1>
-                    ├── <version-type-id-#2>
+                └── <platform-installation-id-#N>
+                    ├── <measurement-csv-#1>
+                    ├── <measurement-csv-#2>
                     ├── ...
-                    └── <version-type-id-#N>
-                        ├── <version-id-#1>
-                        ├── <version-id-#2>
-                        ├── ...
-                        └── <version-id-#N>
-                            ├── <measurement-csv-#1>
-                            ├── <measurement-csv-#2>
-                            ├── ...
-                            └── <measurement-csv-#N>
+                    └── <measurement-csv-#N>
     ```
     the above hierarchy should be kept the same if another database rather than GraalVM has been used.
-1. Populate the `/web/db.sqlite3` with new measurements.
+1. Populate the `/web/db.sqlite3` with measurements' metadata.
+
+For example, to download data of 2018 and 2019, simply run:
+```bash
+cd scripts
+./graal.sh 01-2018 12-2019
+```
+
+**Note**: the tarballs are removed after extraction and the measurement folders are also removed after they are stored in sources. This is to leave out free space. Only `downloads/downloads.log` keeps the track of which files are already stored. If it is required to re-download a set of measurement, remove the corresponding line form the log. 
+
+## Running first simulation 
