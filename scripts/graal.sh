@@ -2,12 +2,11 @@
 
 open_link() {
     # Check if both month and year arguments are provided
-    if [ $# -ne 3 ]; then
+    if [ $# -ne 4 ]; then
         echo "Usage: $0 <month> <year> <downloads>"
         exit 1
     fi
 
-    # Parse month and year arguments
     month=$1
     year=$2
 
@@ -48,8 +47,13 @@ open_link() {
     if grep -qF "$filename" "$3/downloads.log"; then
         echo "file $filename is already downloaded."
     else
-        wget $link -P "$3" -O "$filename" 
-        tar -xf $filename -C "$3" && rm $filename && (echo "$filename" >> "$3/downloads.log")
+        echo "downloading $filename ..."
+        wget $link -P "$3" -O "$filename" -q
+        tar -xf $filename -C "$3" && rm $filename 
+        foldername="$3/${year}-${month}"
+        echo "unzipiing to $foldername ..."
+        python $PHOENIX_HOME/scripts/fetch.py $foldername "$4" && (echo "$filename" >> "$3/downloads.log") && rm $foldername -rf
+        echo "removing $foldername ..."
     fi
     
     
@@ -78,9 +82,9 @@ while [ $current_year -le $end_year ]; do
     while [ $current_month -le 12 ]; do
         # Call the function to open the link
         month=$(printf "%02d" "$current_month")
-        echo $month $current_year
-        open_link $month $current_year $download_directory
+        open_link $month $current_year $download_directory $source
         # Increment the month
+        echo $current_year $month
         ((current_month++))
         if [ $current_year -eq $end_year ]; then
             if [ $current_month -gt $end_month ]; then
@@ -95,3 +99,5 @@ while [ $current_year -le $end_year ]; do
     # Increment the year
     ((current_year++))
 done
+
+echo "done ."
