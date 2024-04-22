@@ -83,15 +83,24 @@ class PlatformInstallation(models.Model):
 
 
 class Measurement(models.Model):
-    create_time = models.DateTimeField()
-    status_time = models.DateTimeField()
+    name = models.CharField(max_length=128, unique=True)
     machine_host = models.ForeignKey(MachineHost, on_delete=models.CASCADE)
     platform_installation = models.ForeignKey(PlatformInstallation, on_delete=models.CASCADE)
     benchmark_workload = models.ForeignKey(BenchmarkWorkload, on_delete=models.CASCADE)
     configuration = models.ForeignKey(Configuration, on_delete=models.CASCADE)
-    measurement_csv = models.URLField()
+    measurement_directory = models.URLField()
 
     def __str__ (self):
-        return f"{self.id} - {self.measurement_csv}"
+        return f"{self.id} - {self.measurement_directory}"
 
 
+class Comparison(models.Model):
+    create_time = models.DateTimeField(null=True)
+    measurement_old = models.ForeignKey(Measurement, on_delete=models.CASCADE, related_name="old")
+    measurement_new = models.ForeignKey(Measurement, on_delete=models.CASCADE, related_name="new")
+    regression = models.BooleanField(default=False)
+    p_value = models.DecimalField(default=0, decimal_places=14, max_digits=20)
+    column = models.CharField(max_length=128, default="iteration_time_ns")
+
+    def __str__ (self):
+        return f"{self.id} - {self.measurement_old.id} vs {self.measurement_new.id}"
