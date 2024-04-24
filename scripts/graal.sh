@@ -25,7 +25,7 @@ open_link() {
             link="https://zenodo.org/records/7657656/files/$year-$month.tar.xz?download=1"
             ;;
         "2020")
-            link="https://zenodo.org/records/7659890/files/$year-$month.tar.xz?download=1"
+            link="https://zenodo.org/records/7650322/files/$year-$month.tar.xz?download=1"
             ;;
         "2021")
             link="https://zenodo.org/records/7650320/files/$year-$month.tar.xz?download=1"
