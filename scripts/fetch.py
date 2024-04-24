@@ -18,25 +18,6 @@ from pathlib import Path
 from datetime import datetime
 import requests
 
-# def save_diffs(directory: Path, machine_type: int, configuration:int, benchmark_workload: int) -> None:
-#     filename = directory / f"../diffs-{machine_type}-{configuration}-{benchmark_workload}.json"
-#     if filename.exists():
-#         return
-    
-#     url = f"https://graal.d3s.mff.cuni.cz/qry/comp/bwcmtpipi?" \
-#         + f"machine_type={machine_type}&configuration={configuration}&benchmark_workload={benchmark_workload}&" \
-#         + f"extra=platform_installation_old&extra=machine_type&extra=configuration&extra=benchmark_workload&" \
-#         + f"extra=platform_installation_new&extra=platform_installation_old&" \
-#         + f"extra=platform_installation_new__type&extra=platform_installation_old__type&" \
-#         + f"extra=platform_installation_new__version__time&extra=platform_installation_old__version__time"
-    
-    
-#     data_record = requests.get(url)
-#     if data_record.status_code == 200:
-#         with open(filename, "w") as json_diff:
-#             json_diff.write(data_record.text)
-
-
 def copy_measurements(source_directory: Path, target_directory: Path, global_metadata: dict) -> None:
     directory_path = Path(source_directory / "measurement")
 
@@ -80,7 +61,10 @@ def copy_measurements(source_directory: Path, target_directory: Path, global_met
                         obj.save()
                                
                     filepath = folder / f"{measurement_id.name}.csv"
-                    shutil.copyfile(measurement_id / "default.csv" , filepath)
+                    source_file = measurement_id / "default.csv"
+                    # it did not exist for 2018-07/measurement/78/79/56/2567978/default.csv
+                    if source_file.exists():
+                        shutil.copyfile(measurement_id / "default.csv" , filepath)
         print (f"{source_directory} {i+1}%")          
     print (f"Storing measurements to {target_directory} ...")
                     
