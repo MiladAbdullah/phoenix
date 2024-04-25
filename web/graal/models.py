@@ -101,7 +101,8 @@ class Comparison(models.Model):
     measurement_new = models.ForeignKey(Measurement, on_delete=models.CASCADE, related_name="new")
     regression = models.BooleanField(default=False)
     p_value = models.DecimalField(default=0, decimal_places=14, max_digits=20)
+    size_effect = models.DecimalField(default=0, decimal_places=4, max_digits=10)
     metric = models.CharField(max_length=128, default="iteration_time_ns")
 
     def __str__ (self):
-        return f"{self.id} - {self.measurement_old.id} vs {self.measurement_new.id}"
+        return f"{self.id} "
