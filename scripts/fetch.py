@@ -16,7 +16,6 @@ import argparse
 import json
 from pathlib import Path
 from datetime import datetime
-import requests
 
 def copy_measurements(source_directory: Path, target_directory: Path, global_metadata: dict) -> None:
     directory_path = Path(source_directory / "measurement")
@@ -65,8 +64,8 @@ def copy_measurements(source_directory: Path, target_directory: Path, global_met
                     # it did not exist for 2018-07/measurement/78/79/56/2567978/default.csv
                     if source_file.exists():
                         shutil.copyfile(measurement_id / "default.csv" , filepath)
-        print (f"{source_directory} {i+1}%")          
-    print (f"Storing measurements to {target_directory} ...")
+        print (f"\t{source_directory} {i+1}%")          
+    print (f"\tStoring measurements to {target_directory} ...")
                     
 def get_or_create_metadata(model, id:int, data:dict) -> django.db.models:
     obj = model.objects.filter(id=id)
@@ -131,7 +130,7 @@ def update_metadata(target_directory: Path) -> dict:
         update_metadata.pop('type')
         platform_installations[int(id)] = get_or_create_metadata(GraalModels.PlatformInstallation, int(id), update_metadata)
     
-    print ("Storing metadata ...")
+    print ("\tStoring metadata ...")
     return {
         'machine_types':machine_types,
         'configurations':configurations,
