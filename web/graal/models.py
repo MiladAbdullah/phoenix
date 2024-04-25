@@ -95,12 +95,13 @@ class Measurement(models.Model):
 
 
 class Comparison(models.Model):
-    create_time = models.DateTimeField(null=True)
+    measurement_old_count = models.SmallIntegerField(default=33)    
+    measurement_new_count = models.SmallIntegerField(default=33)    
     measurement_old = models.ForeignKey(Measurement, on_delete=models.CASCADE, related_name="old")
     measurement_new = models.ForeignKey(Measurement, on_delete=models.CASCADE, related_name="new")
     regression = models.BooleanField(default=False)
     p_value = models.DecimalField(default=0, decimal_places=14, max_digits=20)
-    column = models.CharField(max_length=128, default="iteration_time_ns")
+    metric = models.CharField(max_length=128, default="iteration_time_ns")
 
     def __str__ (self):
         return f"{self.id} - {self.measurement_old.id} vs {self.measurement_new.id}"
