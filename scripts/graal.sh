@@ -40,16 +40,17 @@ open_link() {
     esac
 
     # Open the link
-    echo "Opening link for $month/$year: $link"
+    
     mkdir -p "$3"
     filename="$3/$month-$year.tar.xz"
 
     if grep -qF "$filename" "$3/downloads.log"; then
         echo "file $filename is already downloaded."
     else
-        echo "downloading $filename ..."
+        echo "downloading $link for $month/$year"
         wget $link -P "$3" -O "$filename" -q
-        tar -xf $filename -C "$3" && rm $filename 
+        tar -xf $filename -C "$3" || return
+        rm $filename 
         foldername="$3/${year}-${month}"
         echo "unzipiing to $foldername ..."
         python $PHOENIX_HOME/scripts/fetch.py $foldername "$4" && (echo "$filename" >> "$3/downloads.log") && rm $foldername -rf
@@ -64,7 +65,7 @@ open_link() {
 
 # Check if the script received at least two arguments
 if [ "$#" -lt 2 ]; then
-    echo "Usage: $0 <FROM:mm-yyyy> <TO:mm-yyyy>"
+    echo "Usage: $0 <FROM:m-yyyy> <TO:m-yyyy>"
     exit 1
 fi
 download_directory="${DOWNLOADS:-"$PHOENIX_HOME/downloads"}"
@@ -83,8 +84,7 @@ while [ $current_year -le $end_year ]; do
         # Call the function to open the link
         month=$(printf "%02d" "$current_month")
         open_link $month $current_year $download_directory $source
-        # Increment the month
-        echo $current_year $month
+        
         ((current_month++))
         if [ $current_year -eq $end_year ]; then
             if [ $current_month -gt $end_month ]; then
@@ -99,5 +99,7 @@ while [ $current_year -le $end_year ]; do
     # Increment the year
     ((current_year++))
 done
-
-echo "done ."
+echo "Downloading finished"
+echo "Collecting Diffs"
+python $PHOENIX_HOME/scripts/diffs.py $source
+echo "Collecting Diffs finished"
