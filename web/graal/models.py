@@ -103,6 +103,7 @@ class Comparison(models.Model):
     p_value = models.DecimalField(default=0, decimal_places=14, max_digits=20)
     size_effect = models.DecimalField(default=0, decimal_places=4, max_digits=10)
     metric = models.CharField(max_length=128, default="iteration_time_ns")
-
+    generated = models.BooleanField(default=False)
+    
     def __str__ (self):
         return f"{self.id} "
