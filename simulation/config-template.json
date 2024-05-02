@@ -1,6 +1,5 @@
 {
     "name": "some name for results",
-    "schedule":  "now",
     "source": "$GRAAL_SOURCE",
     "data": {
         "start": "01-01-2017",
@@ -15,11 +14,10 @@
     },
     "methods": {
         "pre-process":{
-            "methods": [
-               "discard-warmup",
-                "discard-iteration-outliers",
-                "discard-run-outliers"
-            ]
+            "method": "clean_iterations",
+            "configuration" : {
+                "verbose": "True"
+            }
         },
         "lower-limit": {
             "method" : "constant",
@@ -29,7 +27,7 @@
             }
         },
         "upper-limit": {
-            "method" : "Curve Fit",
+            "method" : "curve-fit",
             "configuration" : {
                 "max_run": 100,
                 "max_measuring_time": 300
