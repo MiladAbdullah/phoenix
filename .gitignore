@@ -163,6 +163,7 @@ cython_debug/
 extracted/
 downloads/
 source/
+cache/
 *.csv
 *.png
 _old_stuff/
