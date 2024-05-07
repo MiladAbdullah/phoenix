@@ -1,11 +1,21 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+
+"""
+This script defines the CleanIterations class, which is used to clean a measurement 
+from warmup and extreme data points.
+"""
+
+
 import argparse
-import os
 import numpy as np
-from methods.pre_process.pre_process_method import PreProcessMethod
-from typing import Any
+import os
+import pandas as pd
 import warnings
 from pathlib import Path
-import pandas as pd
+
+# local apps
+from simulation.methods.pre_process.pre_process_method import PreProcessMethod
 
 class gag_runtime_warnings (warnings.catch_warnings):
     def __enter__ (self):
@@ -13,9 +23,11 @@ class gag_runtime_warnings (warnings.catch_warnings):
         warnings.simplefilter ('ignore', RuntimeWarning)
 
 
-class CleanIterations(PreProcessMethod):
+class CleanIterations(PreProcessMethod): 
+    
     # once the csv file is cleaned, we add "cleaned" at end of the filename to avoid re-computing warmup
     cache_label = "cleaned"
+    cache_ignore = os.environ.get("GRAAL_SOURCE", "")
     file_type = "csv"
     
     def __init__(self, 
@@ -24,7 +36,16 @@ class CleanIterations(PreProcessMethod):
                 warmup_window_size_ms: int = 60000, 
                 trim_share: float = 0.05, 
                 trim_limit: float = 0.1):
-        
+        """
+        Initialize the CleanIterations object.
+
+        Parameters:
+        - verbose: If True, print verbose logs. Default is False.
+        - warmup_share_limit: Share limit for warmup data points. Default is 0.1.
+        - warmup_window_size_ms: Window size for warmup data points in milliseconds. Default is 60000.
+        - trim_share: Share of extreme data points to be trimmed. Default is 0.05.
+        - trim_limit: Limit for trimming extreme data points. Default is 0.1.
+        """
         CleanIterations.assert_args(warmup_share_limit, warmup_window_size_ms, trim_share, trim_limit) 
         
         self.warmup_share_limit = warmup_share_limit
@@ -32,43 +53,51 @@ class CleanIterations(PreProcessMethod):
         self.trim_share = trim_share
         self.trim_limit = trim_limit
         self.verbose = verbose
-        super().__init__(name="clean_iterations")
+        super().__init__(method_name="clean_iterations")
 
-    def process(self, measurement_path: Path|str, cache_path: Path = None) -> pd.DataFrame:
+    def process(self, measurement_path: Path|str) -> str|None:
+        """
+        Process the measurement file at the given path.
+
+        Parameters:
+        - measurement_path: Path to the measurement file.
+
+        Returns:
+        - Path to the new cleaned measurement file.
+        """
+        
+        
+        if isinstance(measurement_path, str):
+            measurement_path = Path() / measurement_path
         
         if not measurement_path.exists():
             self.log_error(f"cannot find {measurement_path}")
-            exit(1)
+            return None
         
         filename_no_ext = measurement_path.name.split('.')[0]
+               
+        # cache path
+        cache_dir = (Path () /__file__).parent / "cache" / \
+            str(measurement_path.parent.absolute()).replace(self.cache_ignore + "/","", 1).replace('/','-')
+
+
+        # to avoid having . in the filename, we get rid of floating points
+        new_file_name = f"{filename_no_ext}_{self.cache_label}_{int(self.warmup_share_limit*100)}" \
+            + f"_{self.warmup_window_size_ms//1000}s_{int(self.trim_share*100)}_{int(self.trim_limit*100)}"\
+            + f".{self.file_type}"
         
+        new_file_path = cache_dir / new_file_name
+      
+        if new_file_path.exists():
+            return str(new_file_path.absolute())
+        
+                
         try:
             frame = pd.read_csv(measurement_path)
             
         except pd.errors.EmptyDataError:
-            self.log_error(f"{self.mp} has no columns, returning an empty data frame.")
-            return pd.DataFrame()
-        
-        
-        # first check if the given arguments make sense
-        
-        
-        # look if we already pre-processed the data
-        if cache_path is not None:
-            # to avoid having . in the filename, we get rid of floating points
-            new_file_name = f"{filename_no_ext}_{self.cache_label}_{int(self.warmup_share_limit*100)}" \
-                + f"_{self.warmup_window_size_ms//1000}s_{int(self.trim_share*100)}_{int(self.trim_limit*100)}"\
-                + f".{self.file_type}"
-            
-            new_file_path = cache_path / new_file_name
-            
-            if new_file_path.exists():
-                self.log_info(f"{new_file_path} already exists.")
-                return pd.read_csv(new_file_path)
-            
-            else:
-                self.log_info(f"creating {new_file_path}.")
-                
+            self.log_error(f"{self.mp} has no columns, returning None.")
+            return None
         
         # calculate the warmup indexes
         try:
@@ -77,10 +106,7 @@ class CleanIterations(PreProcessMethod):
             warmed_up.reset_index()
         
             # we only take in account time
-            iteration_time_ns = [
-                (warmed_up.iloc[i]['iteration_time_ns'], i)
-                for i in range(len(warmed_up))
-            ]
+            iteration_time_ns = [ (warmed_up.iloc[i]['iteration_time_ns'], i) for i in range(len(warmed_up))]
             self.log_info(f"warmup process finished for {filename_no_ext}")
 
             # dampen extremes
@@ -95,20 +121,21 @@ class CleanIterations(PreProcessMethod):
                 result = frame
                 
             # if we activated cache, then save it
-            if cache_path is not None:
-                self.log_info(f"caching {new_file_path}")
-                os.makedirs(cache_path, exist_ok=True)
-                result.to_csv(new_file_path, index=False)
-                
+            
+            self.log_info(f"caching {new_file_path}")
+            os.makedirs(cache_dir, exist_ok=True)
+            result.to_csv(new_file_path, index=False)
+            
+            self.log_info(f"successfully created {new_file_path}")
             # saving the data
-            return result
+            return str(new_file_path.absolute())
         
         except ValueError:
             self.log_error(f"{measurement_path} has no rows, returning the frame untouched")
-            return frame
+            return None
         
     @classmethod  
-    def assert_args( warmup_share_limit:float, warmup_window_size_ms:float, trim_share:float, trim_limit:float):
+    def assert_args(cls, warmup_share_limit:float, warmup_window_size_ms:float, trim_share:float, trim_limit:float):
         assert warmup_window_size_ms > 0, "warmup_window_size_ms should be bigger than 0"
         assert warmup_share_limit < 1 and warmup_share_limit > 0, "warmup_share_limit should be between (0 and 1)"
         assert trim_share < 1 and trim_share > 0, "trim_limit should be between (0 and 1)"
@@ -313,5 +340,4 @@ if __name__ == "__main__":
             trim_share = args.trim_share,
             trim_limit = args.trim_limit)
         
-        clean_iteration_method.process(Path() / source_file, cache_directory)
-        
+        print(clean_iteration_method.process(Path() / source_file))
