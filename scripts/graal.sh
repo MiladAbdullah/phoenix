@@ -99,7 +99,3 @@ while [ $current_year -le $end_year ]; do
     # Increment the year
     ((current_year++))
 done
-echo "Downloading finished"
-echo "Collecting Diffs"
-python $PHOENIX_HOME/scripts/diffs.py $source
-echo "Collecting Diffs finished"
