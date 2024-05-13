@@ -1,5 +1,5 @@
-from simulation.method import PreProcessMethod
+from simulation.wrapper import PreProcessWrapper
 
 METHOD_MAP = {
-    "pre-process": PreProcessMethod
+    "pre-process": PreProcessWrapper
 }
