@@ -54,8 +54,7 @@ class CleanIterations(PreProcessMethod):
 		self.warmup_window_size_ms = warmup_window_size_ms
 		self.trim_share = trim_share
 		self.trim_limit = trim_limit
-		self.verbose = verbose
-		super().__init__(method_name="clean_iterations")
+		super().__init__(method_name="clean_iterations", verbose=verbose)
 
 	def process(self, measurement_path: Path | str) -> str | None:
 		"""
@@ -125,12 +124,12 @@ class CleanIterations(PreProcessMethod):
 			os.makedirs(cache_dir, exist_ok=True)
 			result.to_csv(new_file_path, index=False)
 
-			self.log_info(f"successfully created {new_file_path}")
+			# self.log_info(f"successfully created {new_file_path}")
 			# saving the data
 			return str(new_file_path.absolute())
 
 		except ValueError:
-			self.log_error(f"{measurement_path} has no rows, returning the frame untouched")
+			self.log_warning(f"{measurement_path} has no rows, returning None")
 			return None
 
 	@classmethod
@@ -155,7 +154,7 @@ class CleanIterations(PreProcessMethod):
 				data['total_ms'] = np.cumsum(data['iteration_time_ns']) // 1000000
 
 			except (IndexError, KeyError, TypeError, ValueError, OverflowError) as e:
-				self.log_error(str(e))
+				pass
 
 		if 'compilation_total_ms' not in data:
 			# Aggregate compilation time can be estimated from compilation time
@@ -166,7 +165,7 @@ class CleanIterations(PreProcessMethod):
 				data['compilation_total_ms'] = np.cumsum(data['compilation_total_ms'])
 
 			except (IndexError, KeyError, TypeError, ValueError, OverflowError) as e:
-				self.log_error(str(e))
+				pass
 
 		return data
 
