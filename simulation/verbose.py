@@ -32,7 +32,7 @@ class Verbose:
             
     def log_error(self, message: str, *args: Any, **kwargs: Any):
         self.logger.setLevel(logging.ERROR)
-        self.logger.error(message, *args , **kwargs)
+        self.logger.error(message, *args, **kwargs)
         
     def log_error_critical(self, message: str, *args: Any, **kwargs: Any):
         self.logger.setLevel(logging.CRITICAL)
