@@ -1,0 +1,52 @@
+{
+    "name": "baseline",
+    "source": "$PHOENIX_HOME/source",
+    "result": "$PHOENIX_HOME/result",
+    "columns": [
+        "iteration_time_ns"
+    ],
+    "data": {
+        "start": "01-01-2015",
+        "end": "31-12-2023",
+        "filter": {
+            "machine-types": [6],
+            "configurations": [],
+            "benchmark-suites": [],
+            "platform-types": [],
+            "benchmarks": [],
+            "platform_installations": []
+        }
+    },
+    "methods": {
+        "pre-process":{
+            "method": "clean_iterations",
+            "configuration": {
+
+            }
+        },
+        "limit": {
+            "method": "constant_limit",
+            "configuration": {
+                "min_run": 11,
+                "max_run": 100
+            }
+        },
+        "frequency": {
+            "method" : "sequential",
+            "configuration": {
+
+            }
+        },
+        "detection": {
+            "method" : "graal_detector",
+            "configuration": {
+            }
+        },
+        "control": {
+
+        }
+    },
+    "os": {
+        "process_count": 32
+    }
+}
