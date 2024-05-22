@@ -33,7 +33,9 @@ class Sample:
 		self.machine_type = measurement.machine_host.machine_type.id
 		self.configuration = measurement.configuration.id
 		self.benchmark_workload = measurement.benchmark_workload.id
-		self.platform_installation = measurement.platform_installation.id
+		self.pl_inst = measurement.platform_installation.id
+		self.pl_inst_type = measurement.platform_installation.platform_type.id
+
 		self.measurement = measurement
 		self.measurements = [path for path in Path(measurement.measurement_directory).glob("*.csv")]
 		self.count = len(self.measurements)
@@ -42,25 +44,24 @@ class Sample:
 		self.measurements = new_paths
 		self.count = len(new_paths)
 
-	def get_data(self, metric: str = "iteration_time_ns", error_logger: callable = None) -> List[np.array]:
+	def get_data(self, column: str, error_logger: callable = None) -> List[np.array]:
 		my_data = []
 		for measurement in self.measurements:
 			try:
 				measurement_reading = pd.read_csv(measurement)
-				my_data.append(measurement_reading[metric].to_numpy())
+				my_data.append(measurement_reading[column].to_numpy())
 
 			except (FileNotFoundError, PermissionError, UnicodeDecodeError, EmptyDataError, MemoryError) as e:
 				if error_logger is not None:
 					error_logger(f"Failure in reading file {measurement}, more details: {e}")
 
 			except (KeyError, AttributeError, TypeError) as e:
-				if error_logger is not None:
-					error_logger(f"Failure in reading metric {metric}, more details: {e}")
+				raise KeyError
 
 		return my_data
 
 	def get_meta_key(self):
-		return f"{self.machine_type}-{self.configuration}-{self.benchmark_workload}-{self.platform_installation}"
+		return f"{self.machine_type}-{self.configuration}-{self.benchmark_workload}-{self.pl_inst_type}:{self.pl_inst}"
 
 	def is_sibling(self, other) -> bool:
 		"""
@@ -88,7 +89,7 @@ class Sample:
 		return _self.platform_installation.version.datetime < _other.platform_installation.version.datetime
 
 	def __str__(self) -> str:
-		return str(self.__dict__)
+		return f"{self.pl_inst} - {self.measurement.platform_installation.version.datetime}"
 
 
 class Data:
@@ -100,7 +101,7 @@ class Data:
 	# Hierarchy based storage
 	# {machine_type-configuration-benchmark_workload-platform_installation: sample}
 	# the path can be changed for a new pre-processed path
-	samples: dict[str, Sample]
+	samples: dict[str, List[Sample]]
 
 	def __init__(self, configuration: dict = None, query_set: django.db.models.query.QuerySet = None) -> None:
 		"""
@@ -162,48 +163,24 @@ class Data:
 		assert self.start <= self.end, f"start ({self.start}) cannot be later than end ({self.end})"
 		self.samples = Data.create_samples(self.query_set)
 
-	@classmethod
-	def create_samples(cls, query_set: django.db.models.query.QuerySet) -> dict:
+	@staticmethod
+	def create_samples(query_set: django.db.models.query.QuerySet) -> dict[str, List[Sample]]:
 
 		samples = {}
 		for measurement in query_set:
 			machine_type_id = measurement.machine_host.machine_type.id
 			configuration_id = measurement.configuration.id
 			benchmark_workload_id = measurement.benchmark_workload.id
+			platform_installation_type_id = measurement.platform_installation.platform_type.id
 			platform_installation_id = measurement.platform_installation.id
 
-			key = f"{machine_type_id}-{configuration_id}-{benchmark_workload_id}-{platform_installation_id}"
+			key = f"{machine_type_id}-{configuration_id}-{benchmark_workload_id}-{platform_installation_type_id}"
 			if key not in samples:
+				samples[key] = []
 
-				samples[key] = Sample(measurement)
+			samples[key].append(Sample(measurement))
 
 		return samples
 
-	def query(self, m_types=None, cfs=None, bws=None, pl_ins= None, from_dt=None, to_dt=None) -> dict:
-		query_results = {}
-
-		for key, sample in self.samples.items():
-			if m_types is not None and sample.machine_type not in m_types:
-				continue
-
-			if cfs is not None and sample.configuration not in cfs:
-				continue
-
-			if bws is not None and sample.benchmark_workload not in bws:
-				continue
-
-			if pl_ins is not None and sample.platform_installation not in pl_ins:
-				continue
-
-			if from_dt is not None and sample.version_datetime >= from_dt:
-				continue
-
-			if to_dt is not None and sample.version_datetime < to_dt:
-				continue
-
-			query_results[key] = sample
-
-		return query_results
-
-	def __str__ (self) -> str:
-		return f"data range between {self.start} and {self.end}, including {len(self.samples)} samples"
+	def __str__(self) -> str:
+		return f"data range between {self.start} and {self.end}, including {len(self.samples)} sample families"
