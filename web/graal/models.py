@@ -102,9 +102,14 @@ class Comparison(models.Model):
     measurement_new = models.ForeignKey(Measurement, on_delete=models.CASCADE, related_name="new")
     regression = models.BooleanField(default=False)
     p_value = models.DecimalField(default=0, decimal_places=14, max_digits=20)
-    size_effect = models.DecimalField(default=0, decimal_places=4, max_digits=10)
+    effect_size = models.DecimalField(default=0, decimal_places=4, max_digits=10)
     column = models.CharField(max_length=128, default="iteration_time_ns")
     generated = models.BooleanField(default=False)
-    
+
     def __str__(self):
         return f"{self.id}"
+
+
+class InvalidComparison(models.Model):
+    key = models.CharField(max_length=256, unique=True)
+    reason = models.TextField()
