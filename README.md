@@ -105,7 +105,7 @@ The baseline configuration is a `json` file:
         "start": "01-01-2015",
         "end": "31-12-2023",
         "filter": {
-            "machine-types": [6],
+            "machine-types": [],
             "configurations": [],
             "benchmark-suites": [],
             "platform-types": [],
