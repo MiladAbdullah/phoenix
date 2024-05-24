@@ -1,215 +1,158 @@
-# Replication Package
+# Phoenix
+Phoenix simulates performance testing project by replacing functional components in favour of boosting the testing process. The running example is GraalVM performance testing and the scripts are written specifically to download and manage GraalVM performance testing project. For other projects, there needs a few adjustment mentioned at the end of this document. 
 
 
-The approach involves considering multiple [methods](/methods/README.md) to be adjusted in one simulation, and the simulation runs over the entire GraalVM performance testing. Each links to its relevant `README`.
-The methods are in four categories:
+## Setting up the environment
+The scripts are written in `bash` and `python3.12`. First update the packages, install `python3.12` and `python3.12-venv`.
+### Linux
+1. Ubuntu and Debian
+    ```bash
+    apt-get update
+    apt-get install python3.12
+    apt-get install python3.12-venv
+    python3.12 -m venv env
+    ```
 
-1. Defining the [pre-process](methods/pre-process/README.md) steps (can be multiple with order or none):
-    - [Discard Warmup](methods/pre-process/discard-warmup/README.md)
-    - [Discard Iteration Outliers](methods/pre-process/discard-iteration-outliers/README.md)
-    - [Discard Run Outliers](methods/pre-process/discard-run-outliers/README.md)
+1. Centos/Red Hat
+    TODO
 
-1. Defining lower or upper [limits](methods/limit/README.md) (of how many iterations and runs):
-    - [Constant](methods/limit/constant/README.md)
-    - [Curve Fit](methods/limit/curve-fit/README.md)
-
-1. Defining the [frequency](methods/frequency/README.md) of benchmarking:
-    - [Constant](methods/frequency/constant/README.md)
-    - [Time Based](methods/frequency/time-based/README.md)
-    - [Commit Type based](methods/frequency/commit-type-based/README.md)
-    - [Event based](methods/frequency/event-based/README.md)
-    - [Computation based](methods/frequency/computation-based/README.md):
-        -  [Accurate Modeling](methods/frequency/computation-based/accurate-modeling/README.md)
+1. Fedora
+    TODO
 
 
-1. Deciding on how to [control](methods/control/README.md) measuring:
-    - [Constant](methods/control/constant/README.md)
-    - [PEASS](methods/control/peass/README.md)
-    - [Mutations](methods/control/mutations/README.md) 
+Save the path to current directory to variable `PHOENIX_HOME`. Please note that the following command will add the variable to `.bashrc`.
 
-The simulation runs with selected methods configured and set of parameters in the `simulation/config.json`:
+```bash
+echo 'export PHOENIX_HOME=$(pwd)' >> ~/.bashrc
+source ~/.bashrc
+```
 
+Create and activate a Python virtual environment. Note that this is not required if you have a dedicated machine for Phoenix or you can install all python libraries for all users. If a virtual environment is preferred, follow the following steps:
+
+```bash
+cd $PHOENIX_HOME
+python3.12 -m venv env
+source env/bin/activate
+```
+
+Now, you should have a directory with python base packages. Commonly the `PS` also changes to include the name of the environment such as `(env) <PS>#`. The next step installs all packages required for this project inside the environment (or for all users in case no virtual environment was created).
+
+To install the packages simply run the following command:
+
+```bash
+pip install -r requirements.txt
+```
+
+We store meta data of the project in a `SQLite` database powered by Python/Django under directory `web/` and it is required for running the scripts. However, the database is stored locally, because it stores file paths. To migrate the database run the following:
+
+```bash
+cd $PHOENIX_HOME
+python manage.py migrate
+```
+
+
+Now everything is ready for running the scripts which fetches GraalVM perofmrance testing results from https://zenodo.org/communities/graalvm-compiler-benchmark-results,  and prepare the environment to run as a simulation. The script `$PHOENIX_HOME/scripts/graal.sh` receives a date range as an input. For example, to download data of August and September of 2022, run:
+
+```bash
+cd $PHOENIX_HOME/scripts
+./graal.sh 8-2022 9-2022
+```
+
+Note that the scripts can take a while as it downloads relatively large amount of data (1 Gigabytes for each month), unpack them, restore them into a source directory, saves its meta data in the database and so on. Once the above script is done, check the Source directory (`$PHOENIX_HOME/source`):
+
+```
+| source
+    | 5 
+        | 34
+            | 121
+            | 122
+        | 35
+    | 6 
+```
+
+The script stores the measurement in the folder as `$PHOENIX_HOME/source/<machine_type>/<configuration>/<benchmark_workload>/<platform_installation>/<measurement_id>.csv`, where each measurement is one single `run` containing multiple invocations of the benchmark `iteration`. For more information about the GraalVM performance testing read the [original paper](https://dl.acm.org/doi/10.1145/3578245.3585025).
+
+In order to download the entire results run the following:
+
+```bash
+cd $PHOENIX_HOME/scripts
+./graal.sh 8-2016 12-2022
+```
+
+This can takes up to couple of hours, but it will not process any results that it has been processed before.
+
+## Running the baseline
+The simulation is a Python script that receives a configuration as `json` file and restore the results in `$PHOENIX_HOME/result/`. Some methods of the simulation employ caching to boost. The cached data is in `$PHOENIX_HOME/_cached/<method_name>`. Both folders get created if they do not exist.
+
+To run the baseline configuration
+```bash
+cd $PHOENIX_HOME/simulation
+python run.py baseline.json -v
+```
+
+The `-v or --verbose` makes the simulation to report all steps and can be quite chatty, remove it if not required. 
+
+The baseline configuration is a `json` file:
 ```json
 {
-    "name": "some name for results",
-    "schedule":  "now",
-    "source": "$GRAAL_SOURCE",
+    "name": "baseline",
+    "source": "$PHOENIX_HOME/source",
+    "result": "$PHOENIX_HOME/result",
+    "columns": [
+        "iteration_time_ns"
+    ],
     "data": {
-        "start": "01-01-2017",
+        "start": "01-01-2015",
         "end": "31-12-2023",
         "filter": {
-            "machine-types": [5, 6],
+            "machine-types": [6],
             "configurations": [],
             "benchmark-suites": [],
-            "version-types": [],
-            "benchmarks": []
+            "platform-types": [],
+            "benchmarks": [],
+            "platform_installations": []
         }
     },
     "methods": {
         "pre-process":{
-            "methods": [
-               "discard-warmup",
-                "discard-iteration-outliers",
-                "discard-run-outliers"
-            ]
-        },
-        "lower-limit": {
-            "method" : "constant",
-            "configuration" : {
-                "min_run": 5,
-                "min_measuring_time": 300
+            "method": "clean_iterations",
+            "configuration": {
+
             }
         },
-        "upper-limit": {
-            "method" : "Curve Fit",
-            "configuration" : {
-                "max_run": 100,
-                "max_measuring_time": 300
+        "limit": {
+            "method": "constant_limit",
+            "configuration": {
+                "min_run": 11,
+                "max_run": 100
             }
         },
         "frequency": {
-            "method" : "time-based",
-            "configuration" : {
-                "schedule" : "--weekly monday"
+            "method" : "sequential",
+            "configuration": {
+
+            }
+        },
+        "detection": {
+            "method" : "graal_detector",
+            "configuration": {
             }
         },
         "control": {
-            "method" : "mutations",
-            "configuration" : {
-                "train-period": "--cycle 6-month",
-                "test-period": "--cycle 6-month"
-            }
+
         }
     },
-    "results": {
-        "csv": "per-configuration",
-        "charts" : "per-simulation",
-        "json": "per-simulation"
-    },
-    "web": {
-        "activate": "true",
-        "host": "localhost",
-        "port": 8008        
-    },
     "os": {
-        "processes": 64,
-        "memory": "4G" 
+        "process_count": 32
     }
 }
 ```
 
-The outline of the project is as following:
-```
-.
-├── downloads
-├── methods
-│   ├── control
-│   │   ├── constant
-│   │   ├── mutations
-│   │   └── peass
-│   ├── frequency
-│   │   ├── commit-type-based
-│   │   ├── computation-based
-│   │   │   └── accurate-modeling
-│   │   ├── constant
-│   │   ├── event-based
-│   │   └── time-based
-│   ├── limit
-│   │   ├── constant
-│   │   └── curve-fit
-│   └── pre-process
-│       ├── discard-iteration-outliers
-│       ├── discard-run-outliers
-│       └── discard-warmup
-├── results
-├── scripts
-├── simulation
-├── source
-└── web
-    ├── graal
-    │   └── migrations
-    ├── interface
-    │   └── migrations
-    └── web
-        └── __pycache__
-```
-## Setup the environment
-1. set PHOENIX_HOME to the current folder
-    ```bash
-    export PHOENIX_HOME=/your/path/to/phoenix
-    ```
 
-1. Install python3.12 and python3.12-venv, skip if python3.12 is already installed
-    * on linux:
-    ```bash
-    sudo add-apt-repository ppa:deadsnakes/ppa
-    sudo apt update 
-    sudo apt install python3.12
-    ```
 
-1. Create and activate virtual environment
-    ```bash
-    python3.12 -m venv env
-    source env/bin/activate
-    pip install -r requirements.txt
-    ```
-    Keep in mind that the environment should be always active during all scripts. 
 
-1. Setup the database:
-    The measurements are stored locally and their meta data is also stored in a local database. To create the database migrate the changes:
 
-    ```bash
-    cd web
-    python manage.py migrate
-    ```
+## Running other configurations
+TODO
 
-## Downloading the GraalVM performance measurements
-Before running the `simulation`, the data should be downloaded and imported to the `source` folder. The `graal.sh` script performs such pre-computation and has to be run and finished before running the simulation. The script performs the following steps:
-
-Usage:
-```
-scripts/graal.sh <FROM> <TO>
-<FROM>: Month and Year in "mm-yyyy" format
-<To>: Month and Year in "mm-yyyy" format
-```
-
-1. Check if the selected timeline is not already downloaded checking `downloads.log` log. 
-1. Download from GraalVM repository to `$DOWNLOADS` (or `downloads/` if variable not set).
-1. Extract the CSV files to `$GRAAL_SOURCE` (or `source/` if variable not set) in the following hierarchy:
-
-    ```
-    $GRAAL_SOURCE/
-    ├── <machine-type-id-#1>
-    ├── <machine-type-id-#2>
-    ├── ...
-    ├── <machine-type-id-#N>
-        ├── <configuration-id-#1>
-        ├── <configuration-id-#2>
-        ├── ...
-        └── <configuration-id-#N>
-            ├── <benchmark-workload-id-#1>
-            ├── <benchmark-workload-id-#2>
-            ├── ...
-            └── <benchmark-workload-id-#N>
-                ├── iteration_time_ns_diffs.csv    // ground truth for given configuration
-                ├── <platform-installation-id-#1>
-                ├── <platform-installation-id-#2>
-                ├── ...
-                └── <platform-installation-id-#N>
-                    ├── <measurement-csv-#1>
-                    ├── <measurement-csv-#2>
-                    ├── ...
-                    └── <measurement-csv-#N>
-    ```
-    the above hierarchy should be kept the same if another database rather than GraalVM has been used.
-1. Populate the `/web/db.sqlite3` with measurements' metadata.
-
-For example, to download data of 2018 and 2019, simply run:
-```bash
-cd scripts
-./graal.sh 01-2018 12-2019
-```
-
-**Note**: the tarballs are removed after extraction and the measurement folders are also removed after they are stored in sources. This is to leave out free space. Only `downloads/downloads.log` keeps the track of which files are already stored. If it is required to re-download a set of measurement, remove the corresponding line form the log. 
-
-## Running first simulation 
+## Tailoring for different performance testing projects
