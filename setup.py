@@ -6,8 +6,8 @@ import setuptools
 setuptools.setup(
     name="simulation",
     version="1.0.0",
-    author='Milad Abdullah',
-    author_email='abdullah@d3s.mff.cuni.cz',
+    author='hidden',
+    author_email='hidden',
     description='GraalVM Performance Testing Automation Simulation',
     #long_description=long_description,
     #long_description_content_type="text/markdown",

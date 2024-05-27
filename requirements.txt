@@ -5,7 +5,6 @@ charset-normalizer==3.3.2
 decorator==5.1.1
 Django==5.0.3
 executing==2.0.1
--e git+ssh://git@github.com/MiladAbdullah/phoenix.git@c2b341b9d8c902249d5653e001e58212ed3561a1#egg=graal&subdirectory=web
 idna==3.7
 ipython==8.23.0
 jedi==0.19.1
@@ -23,7 +22,6 @@ pytz==2024.1
 requests==2.31.0
 scipy==1.13.0
 setuptools==69.5.1
--e git+ssh://git@github.com/MiladAbdullah/phoenix.git@c2b341b9d8c902249d5653e001e58212ed3561a1#egg=simulation
 six==1.16.0
 sqlparse==0.4.4
 stack-data==0.6.3
@@ -32,3 +30,5 @@ traitlets==5.14.2
 tzdata==2024.1
 urllib3==2.2.1
 wcwidth==0.2.13
+-e ./web/
+-e .
