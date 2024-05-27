@@ -7,9 +7,8 @@ The scripts are written in `bash` and `python3.12`. First update the packages, i
 ### Linux
 1. Ubuntu and Debian
     ```bash
-    apt-get update
-    apt-get install python3.12
-    apt-get install python3.12-venv
+    sudo apt-get update
+    sudo apt-get install wget xz-utils python3.12 python3.12-venv -y
     python3.12 -m venv env
     ```
 
@@ -46,7 +45,7 @@ pip install -r requirements.txt
 We store meta data of the project in a `SQLite` database powered by Python/Django under directory `web/` and it is required for running the scripts. However, the database is stored locally, because it stores file paths. To migrate the database run the following:
 
 ```bash
-cd $PHOENIX_HOME
+cd $PHOENIX_HOME/web
 python manage.py migrate
 ```
 
