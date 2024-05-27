@@ -7,10 +7,8 @@ The scripts are written in `bash` and `python3.12`. First update the packages, i
 ### Linux
 1. Ubuntu and Debian
     ```bash
-    apt-get update
-    apt-get install wget
-    apt-get install python3.12
-    apt-get install python3.12-venv
+    sudo apt-get update
+    sudo apt-get install wget xz-utils python3.12 python3.12-venv -y
     python3.12 -m venv env
     ```
 
