@@ -68,8 +68,8 @@ if [ "$#" -lt 2 ]; then
     echo "Usage: $0 <FROM:m-yyyy> <TO:m-yyyy>"
     exit 1
 fi
-download_directory="${DOWNLOADS:-"$PHOENIX_HOME/downloads"}"
-source="${GRAAL_SOURCE:-"$PHOENIX_HOME/source"}"
+download_directory="${"$PHOENIX_HOME/downloads"}"
+source="${"$PHOENIX_HOME/source"}"
 
 start_month=$(echo $1 | cut -d '-' -f 1)
 start_year=$(echo $1 | cut -d '-' -f 2)
