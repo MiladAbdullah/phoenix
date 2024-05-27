@@ -68,8 +68,12 @@ if [ "$#" -lt 2 ]; then
     echo "Usage: $0 <FROM:m-yyyy> <TO:m-yyyy>"
     exit 1
 fi
-download_directory="${"$PHOENIX_HOME/downloads"}"
-source="${"$PHOENIX_HOME/source"}"
+
+DOWNLOADS="downloads"
+SOURCE="source"
+
+download_directory="${PHOENIX_HOME:-.}/$DOWNLOADS"
+source_directory="${PHOENIX_HOME:-.}/$SOURCE"
 
 start_month=$(echo $1 | cut -d '-' -f 1)
 start_year=$(echo $1 | cut -d '-' -f 2)
@@ -83,7 +87,7 @@ while [ $current_year -le $end_year ]; do
     while [ $current_month -le 12 ]; do
         # Call the function to open the link
         month=$(printf "%02d" "$current_month")
-        open_link $month $current_year $download_directory $source
+        open_link $month $current_year $download_directory $source_directory
         
         ((current_month++))
         if [ $current_year -eq $end_year ]; then
