@@ -307,7 +307,7 @@ class Simulation(Verbose):
 
     def collect_results(self):
         simulation_result = (self.result /
-                             f"{self.name}-{self.data.start.strftime("%d-%m-%Y")}-{self.data.end.strftime("%d-%m-%Y")}")
+                             f"{self.name}-{self.data.start.strftime('%d-%m-%Y')}-{self.data.end.strftime('%d-%m-%Y')}")
 
         for major_key, sequence in self.comparing_schedule.items():
 
@@ -413,7 +413,7 @@ class Simulation(Verbose):
 
             evaluation_file = (
                 self.evaluation /
-                f"{self.name}-{self.data.start.strftime("%d-%m-%Y")}-{self.data.end.strftime("%d-%m-%Y")}-{col}.json")
+                f"{self.name}-{self.data.start.strftime('%d-%m-%Y')}-{self.data.end.strftime('%d-%m-%Y')}-{col}.json")
 
             column_results = self.evaluation_results[col]
             rows = []
