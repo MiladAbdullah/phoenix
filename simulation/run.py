@@ -1,7 +1,6 @@
-#!/bin/env python
-import argparse
-import time
+#! /bin/env python3
 
+import argparse
 import django
 import json
 import multiprocessing
@@ -11,17 +10,18 @@ from pathlib import Path
 import re
 from typing import List, Any
 
-import numpy as np
 import pandas as pd
-from django.core.exceptions import ValidationError
+from django.core.exceptions import ValidationError, ObjectDoesNotExist
 from simulation.data import Data, Sample
 from simulation.comparer import GraalComparer
+from simulation.methods.control.controller import Controller
 from simulation.methods.frequency.scheduler import SchedulerMethod
 from simulation.methods.limit.limit_method import LimitMethod
 from simulation.methods.pre_process.pre_process_method import PreProcessMethod
 from simulation.verbose import Verbose
-from simulation.wrapper import Wrapper, PreProcessWrapper, FrequencyWrapper, DetectionWrapper, LimitWrapper
-from django.db.models.query import QuerySet, Q
+from simulation.wrapper import Wrapper, PreProcessWrapper, FrequencyWrapper, DetectionWrapper, LimitWrapper, \
+    ControlWrapper
+from django.db.models.query import QuerySet
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'local_settings')
 django.setup()
 
@@ -32,6 +32,7 @@ WRAPPERS = {
     "frequency": FrequencyWrapper,
     "detection": DetectionWrapper,
     "limit": LimitWrapper,
+    "control": ControlWrapper,
 }
 
 
@@ -43,6 +44,7 @@ class Simulation(Verbose):
     columns: list
     comparing_schedule: dict[str, list[tuple[Sample, Sample]]]
     truth: QuerySet
+    control_results: dict
     comparisons: dict[str, dict[str, Any]]
     data: Data
     min_run: int
@@ -84,10 +86,10 @@ class Simulation(Verbose):
 
         self.source = Path() / original_source
         self.result = Path() / original_result
+        self.control_results = {}
         self.data = Data(_conf["data"])
         self.columns = _conf["columns"]
         self.os = _conf["os"]
-        self.comparisons = {}
 
     def run(self):
         self.log_info(f"Simulation {self.name} started.")
@@ -115,8 +117,14 @@ class Simulation(Verbose):
             method = wrapper.create_method(self.verbose, columns=self.columns)
             self.log_info(f"method for detecting performance change with {wrapper.classname.__name__} started")
             self.collect_comparing_results(method)
+            self.collect_ground_truth()
 
-        self.collect_results()
+        if "control" in self.wrappers:
+            wrapper = self.wrappers['control']
+            method = wrapper.create_method(self.verbose)
+            self.log_info(f"method for controlling performance testing with {wrapper.classname.__name__} started")
+            self.control(method)
+            self.collect_results()
 
     def run_pre_process(self, instance: PreProcessMethod):
         samples_as_list = [item for sublist in self.data.samples.values() for item in sublist]
@@ -188,38 +196,61 @@ class Simulation(Verbose):
                 comparison_object.save()
                 correct_id_list.append(comparison_object.id)
             except ValidationError:
-                self.log_error(f" cannot save {comparison_object.key}")
+                self.log_error(f"cannot save {comparison_object.key}")
 
         self.truth = GraalModels.Comparison.objects.filter(id__in=correct_id_list)
 
-    def collect_results(self):
-        simulation_result = (self.result /
-                             f"{self.name}-{self.data.start.strftime("%d%m%Y")}-{self.data.end.strftime("%d%m%Y")}")
+    def control(self, instance: Controller):
+        paralleled_keys = [k for k in self.comparing_schedule.keys()]
 
-        for key in self.data.samples.keys():
-            machine_type, configuration, benchmark, _ = key.split('-')
-            comparisons = (self.truth.filter(measurement_old__machine_host__machine_type=machine_type)
-                           .filter(measurement_old__configuration=configuration)
-                           .filter(measurement_old__benchmark_workload=benchmark))
+        def control_in_parallel(meta_keys, _result_dict):
+            local_results = {}
+            for meta_key in meta_keys:
+                sample_pairs = self.comparing_schedule[meta_key]
+                for column in self.columns:
+                    controlled_comparisons = instance.control(meta_key, sample_pairs, column)
+                    for database_key, controlled_comparison in controlled_comparisons.items():
+                        local_results[database_key] = controlled_comparison
 
-            sub_folder = simulation_result / f"{machine_type}/{configuration}/{benchmark}/"
-            os.makedirs(sub_folder, exist_ok=True)
+            for _k, _v in local_results.items():
+                # because it is run in parallel
+                _result_dict[_k] = _v
 
+        manager = multiprocessing.Manager()
+        result_dict = manager.dict()
+        Simulation.parallel_run(paralleled_keys, control_in_parallel, self.os["process_count"], result_dict)
+
+        for k, v in result_dict.items():
+            self.control_results[k] = v
+
+    def collect_ground_truth(self):
+        simulation_result = self.result / "ground_truth"
+
+        for database_key, sequence in self.comparing_schedule.items():
             for column in self.columns:
-                column_comparisons = comparisons.filter(column=column)
-                if len(column_comparisons) == 0:
-                    return
+                filename = simulation_result / database_key.replace('-','/') / f"{column}.csv"
+
+                if filename.exists():
+                    continue
+
+                os.makedirs(filename.parent, exist_ok=True)
                 output = []
 
-                for comparison in column_comparisons:
+                for old_sample, new_sample in sequence:
+                    database_key = f"{old_sample.get_meta_key()}:{new_sample.get_meta_key()}:{column}"
+                    try:
+                        comparison = self.truth.get(key=database_key)
+                    except ObjectDoesNotExist:
+                        continue
+
                     output.append({
-                        'machine_type_id': machine_type,
+                        'machine_type_id': comparison.measurement_old.machine_host.machine_type.id,
                         'machine_type_name': comparison.measurement_old.machine_host.machine_type.name,
-                        'configuration_id': configuration,
+                        'configuration_id': comparison.measurement_old.configuration.id,
                         'configuration_name': comparison.measurement_old.configuration.name,
                         'benchmark_suite_id': comparison.measurement_old.benchmark_workload.benchmark_type.id,
                         'benchmark_suite_name': comparison.measurement_old.benchmark_workload.benchmark_type.name,
-                        'benchmark_id': benchmark,
+                        'benchmark_id': comparison.measurement_old.benchmark_workload.id,
                         'benchmark_name': comparison.measurement_old.benchmark_workload.name,
                         'old_platform_type_id': comparison.measurement_old.platform_installation.platform_type.id,
                         'old_platform_type_name': comparison.measurement_old.platform_installation.platform_type.name,
@@ -251,8 +282,84 @@ class Simulation(Verbose):
                         'link': f"https://graal.d3s.mff.cuni.cz/see/difference/{comparison.real_id}"
                         if comparison.real_id else "--generated locally--"
                     })
-                self.log_info(f"creating {sub_folder / column}.csv")
-                pd.DataFrame(output).to_csv(sub_folder / f"{column}.csv", index=False)
+                self.log_info(f"creating {filename}")
+                pd.DataFrame(output).to_csv(filename, index=False)
+
+    def collect_results(self):
+        simulation_result = (self.result /
+                             f"{self.name}-{self.data.start.strftime("%d-%m-%Y")}-{self.data.end.strftime("%d-%m-%Y")}")
+
+        for database_key, sequence in self.comparing_schedule.items():
+
+            for column in self.columns:
+                filename = simulation_result / database_key.replace('-', '/') / f"{column}.csv"
+
+                if filename.exists():
+                    continue
+
+                os.makedirs(filename.parent, exist_ok=True)
+                output = []
+                for old_sample, new_sample in sequence:
+                    database_key = f"{old_sample.get_meta_key()}:{new_sample.get_meta_key()}:{column}"
+                    try:
+                        comparison = self.truth.get(key=database_key)
+
+                    except ObjectDoesNotExist:
+                        continue
+                    predicted = self.control_results[database_key]
+                    meta_data = {
+                        'column': column,
+                        'machine_type': comparison.measurement_old.machine_host.machine_type.id,
+                        'configuration': comparison.measurement_old.configuration.id,
+                        'benchmark_workload': comparison.measurement_old.benchmark_workload.id,
+                        'platform_type': comparison.measurement_old.platform_installation.platform_type.id,
+                        'platform_old': comparison.measurement_old.platform_installation.id,
+                        'platform_new': comparison.measurement_new.platform_installation.id,
+
+                    }
+
+                    comparison_dict = {
+                        'actual_p_value': comparison.p_value,
+                        'actual_old_count': comparison.measurement_old_count,
+                        'actual_new_count': comparison.measurement_new_count,
+                        'actual_regression': comparison.regression,
+                        'actual_effect_size': comparison.effect_size,
+                    }
+                    all_runs = comparison.measurement_old_count + comparison.measurement_new_count
+
+                    if predicted == {}:
+                        predicted_dict = {
+                            'saved_runs': 0,
+                            **{k.replace('actual', 'predicted'): v for k, v in comparison_dict.items()}
+                        }
+                    else:
+                        predicted_dict = {
+                            'saved_runs': all_runs - (predicted['measurement_old_count'] +
+                                                      predicted['measurement_new_count']),
+                            'predicted_p_value': predicted['p_value'],
+                            'predicted_old_count': predicted['measurement_old_count'],
+                            'predicted_new_count': predicted['measurement_new_count'],
+                            'predicted_regression': predicted['regression'],
+                            'predicted_effect_size': predicted['effect_size'],
+                        }
+
+                    if comparison.regression and predicted_dict['predicted_regression']:
+                        result = 'true_positive'
+                    elif comparison.regression:
+                        result = 'false_negative'
+                    elif not predicted_dict['predicted_regression']:
+                        result = 'true_negative'
+                    else:
+                        result = 'false_positive'
+
+                    output.append({
+                        **meta_data,
+                        **comparison_dict,
+                        **predicted_dict,
+                        'result': result,
+                    })
+                self.log_info(f"creating {filename}")
+                pd.DataFrame(data=output).to_csv(filename, index=False)
 
     @staticmethod
     def parallel_run(any_list: List[Any], function: callable, process_count: int, result_collection):
