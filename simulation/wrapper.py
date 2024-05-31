@@ -70,3 +70,8 @@ class LimitWrapper(SimpleWrapper):
 class DetectionWrapper(SimpleWrapper):
     def __init__(self, meta_data: dict) -> None:
         super().__init__(method_name="detection", meta_data=meta_data, category="detection")
+
+
+class ControlWrapper(SimpleWrapper):
+    def __init__(self, meta_data: dict) -> None:
+        super().__init__(method_name="control", meta_data=meta_data, category="control")
