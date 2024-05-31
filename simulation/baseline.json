@@ -2,6 +2,7 @@
     "name": "baseline",
     "source": "$PHOENIX_HOME/source",
     "result": "$PHOENIX_HOME/result",
+    "evaluation": "$PHOENIX_HOME/evaluation",
     "columns": [
         "iteration_time_ns"
     ],
@@ -43,7 +44,9 @@
             }
         },
         "control": {
-
+            "method" : "constant",
+            "configuration": {
+            }
         }
     },
     "os": {
