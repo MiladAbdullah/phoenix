@@ -164,6 +164,7 @@ cache/
 downloads/
 source/
 result/
+evaluation/
 *.csv
 *.png
 _old_stuff/
