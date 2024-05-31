@@ -2,6 +2,7 @@ import logging
 from typing import Any
 from simulation.methods.generic_method import GenericMethod
 
+
 class VerboseMethod(GenericMethod):
         
     verbose: bool
@@ -25,7 +26,7 @@ class VerboseMethod(GenericMethod):
     def log_debug(self, message: str, *args: Any, **kwargs: Any):
         if self.verbose:
             self.logger.setLevel(logging.DEBUG)
-            self.logger.debug(f"{self.name} -> {message}", *args , **kwargs)
+            self.logger.debug(f"{self.name} -> {message}", *args, **kwargs)
                 
     def log_warning(self, message: str):
         if self.verbose:
@@ -34,8 +35,8 @@ class VerboseMethod(GenericMethod):
             
     def log_error(self, message: str, *args: Any, **kwargs: Any):
         self.logger.setLevel(logging.ERROR)
-        self.logger.error(f"{self.name} -> {message}", *args , **kwargs)
+        self.logger.error(f"{self.name} -> {message}", *args, **kwargs)
         
     def log_error_critical(self, message: str, *args: Any, **kwargs: Any):
         self.logger.setLevel(logging.CRITICAL)
-        self.logger.error(f"{self.name} -> {message}", *args , **kwargs)
+        self.logger.error(f"{self.name} -> {message}", *args, **kwargs)
