@@ -10,6 +10,7 @@ from pathlib import Path
 import re
 from typing import List, Any
 
+import numpy as np
 import pandas as pd
 from django.core.exceptions import ValidationError, ObjectDoesNotExist
 from simulation.data import Data, Sample
@@ -22,10 +23,11 @@ from simulation.verbose import Verbose
 from simulation.wrapper import Wrapper, PreProcessWrapper, FrequencyWrapper, DetectionWrapper, LimitWrapper, \
     ControlWrapper
 from django.db.models.query import QuerySet
+from graal import models as GraalModels
+
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'local_settings')
 django.setup()
 
-from graal import models as GraalModels
 
 WRAPPERS = {
     "pre-process": PreProcessWrapper,
@@ -45,6 +47,8 @@ class Simulation(Verbose):
     comparing_schedule: dict[str, list[tuple[Sample, Sample]]]
     truth: QuerySet
     control_results: dict
+    evaluation: Path|None
+    evaluation_results: dict
     comparisons: dict[str, dict[str, Any]]
     data: Data
     min_run: int
@@ -79,6 +83,19 @@ class Simulation(Verbose):
             if resolved is not None:
                 original_result = original_result.replace(variable, resolved)
 
+        if "evaluation" in _conf:
+            original_evaluation = _conf["evaluation"]
+            # resolve variables in the path
+            for variable in re.findall(r"\$[a-z|A-Z|0-9|_|-]+", _conf["evaluation"]):
+                resolved = os.environ.get(variable[1:])
+                if resolved is not None:
+                    original_evaluation = original_evaluation.replace(variable, resolved)
+
+            self.evaluation = Path() / original_evaluation
+            self.evaluation_results = {}
+        else:
+            self.evaluation = None
+
         self.wrappers = {}
         for method_type, method_meta_data in _conf["methods"].items():
             if len(method_meta_data) > 0:
@@ -87,9 +104,9 @@ class Simulation(Verbose):
         self.source = Path() / original_source
         self.result = Path() / original_result
         self.control_results = {}
-        self.data = Data(_conf["data"])
-        self.columns = _conf["columns"]
         self.os = _conf["os"]
+        self.columns = _conf["columns"]
+        self.data = Data(_conf["data"])
 
     def run(self):
         self.log_info(f"Simulation {self.name} started.")
@@ -125,6 +142,9 @@ class Simulation(Verbose):
             self.log_info(f"method for controlling performance testing with {wrapper.classname.__name__} started")
             self.control(method)
             self.collect_results()
+
+        if self.evaluation is not None:
+            self.evaluate()
 
     def run_pre_process(self, instance: PreProcessMethod):
         samples_as_list = [item for sublist in self.data.samples.values() for item in sublist]
@@ -228,7 +248,7 @@ class Simulation(Verbose):
 
         for database_key, sequence in self.comparing_schedule.items():
             for column in self.columns:
-                filename = simulation_result / database_key.replace('-','/') / f"{column}.csv"
+                filename = simulation_result / database_key.replace('-', '/') / f"{column}.csv"
 
                 if filename.exists():
                     continue
@@ -289,77 +309,213 @@ class Simulation(Verbose):
         simulation_result = (self.result /
                              f"{self.name}-{self.data.start.strftime("%d-%m-%Y")}-{self.data.end.strftime("%d-%m-%Y")}")
 
-        for database_key, sequence in self.comparing_schedule.items():
+        for major_key, sequence in self.comparing_schedule.items():
 
             for column in self.columns:
-                filename = simulation_result / database_key.replace('-', '/') / f"{column}.csv"
+                filename = simulation_result / major_key.replace('-', '/') / f"{column}.csv"
 
-                if filename.exists():
-                    continue
+                if not filename.exists():
+                    os.makedirs(filename.parent, exist_ok=True)
+                    result_list = []
 
-                os.makedirs(filename.parent, exist_ok=True)
-                output = []
-                for old_sample, new_sample in sequence:
-                    database_key = f"{old_sample.get_meta_key()}:{new_sample.get_meta_key()}:{column}"
-                    try:
-                        comparison = self.truth.get(key=database_key)
+                    for old_sample, new_sample in sequence:
+                        database_key = f"{old_sample.get_meta_key()}:{new_sample.get_meta_key()}:{column}"
+                        try:
+                            comparison = self.truth.get(key=database_key)
 
-                    except ObjectDoesNotExist:
+                        except ObjectDoesNotExist:
+                            continue
+                        predicted = self.control_results[database_key]
+                        meta_data = {
+                            'column': column,
+                            'machine_type': comparison.measurement_old.machine_host.machine_type.id,
+                            'machine_type_name': comparison.measurement_old.machine_host.machine_type.name,
+                            'configuration': comparison.measurement_old.configuration.id,
+                            'configuration_name': comparison.measurement_old.configuration.name,
+                            'benchmark_suite': comparison.measurement_old.benchmark_workload.benchmark_type.id,
+                            'benchmark_suite_name': comparison.measurement_old.benchmark_workload.benchmark_type.name,
+                            'benchmark_workload': comparison.measurement_old.benchmark_workload.id,
+                            'benchmark_workload_name': comparison.measurement_old.benchmark_workload.name,
+                            'platform_type': comparison.measurement_old.platform_installation.platform_type.id,
+                            'platform_type_name': comparison.measurement_old.platform_installation.platform_type.name,
+                            'platform_old': comparison.measurement_old.platform_installation.id,
+                            'platform_new': comparison.measurement_new.platform_installation.id,
+
+                        }
+
+                        comparison_dict = {
+                            'actual_p_value': comparison.p_value,
+                            'actual_old_count': comparison.measurement_old_count,
+                            'actual_new_count': comparison.measurement_new_count,
+                            'actual_regression': comparison.regression,
+                            'actual_effect_size': comparison.effect_size,
+                        }
+                        all_runs = comparison.measurement_old_count + comparison.measurement_new_count
+
+                        if predicted == {}:
+                            predicted_dict = {
+                                'saved_runs': 0,
+                                **{k.replace('actual', 'predicted'): v for k, v in comparison_dict.items()}
+                            }
+                        else:
+                            predicted_dict = {
+                                'saved_runs': all_runs - (predicted['measurement_old_count'] +
+                                                          predicted['measurement_new_count']),
+                                'predicted_p_value': predicted['p_value'],
+                                'predicted_old_count': predicted['measurement_old_count'],
+                                'predicted_new_count': predicted['measurement_new_count'],
+                                'predicted_regression': predicted['regression'],
+                                'predicted_effect_size': predicted['effect_size'],
+                            }
+
+                        if comparison.regression and predicted_dict['predicted_regression']:
+                            result = 'true_positive'
+                        elif comparison.regression:
+                            result = 'false_negative'
+                        elif not predicted_dict['predicted_regression']:
+                            result = 'true_negative'
+                        else:
+                            result = 'false_positive'
+
+                        result_list.append({
+                            **meta_data,
+                            **comparison_dict,
+                            **predicted_dict,
+                            'all_runs': all_runs,
+                            'result': result,
+                        })
+
+                    self.log_info(f"creating {filename}")
+                    pd.DataFrame(data=result_list).to_csv(filename, index=False)
+                else:
+                    result_list = pd.read_csv(filename).to_dict("records")
+
+                if self.evaluation is not None:
+                    if column not in self.evaluation_results:
+                        self.evaluation_results[column] = {}
+                    self.evaluation_results[column][major_key] = result_list
+
+    def evaluate(self) -> None:
+
+        def make_groups(_column_results, index):
+            created_lists = {}
+            for k, v in _column_results.items():
+                key_parts = k.split('-')
+                created_key = '-'.join(key_parts[:index] + ['x' for _ in range(index, 4)])
+
+                if created_key not in created_lists:
+                    created_lists[created_key] = []
+
+                created_lists[created_key].extend(v)
+            return created_lists
+
+        for col in self.columns:
+
+            evaluation_file = (
+                self.evaluation /
+                f"{self.name}-{self.data.start.strftime("%d-%m-%Y")}-{self.data.end.strftime("%d-%m-%Y")}-{col}.json")
+
+            column_results = self.evaluation_results[col]
+            rows = []
+            for i in range(5):
+                grouped_column_results = make_groups(column_results, i)
+                for key, result_list in grouped_column_results.items():
+                    mt, conf, bw, pt = key.split('-')
+                    if len(result_list) == 0:
                         continue
-                    predicted = self.control_results[database_key]
-                    meta_data = {
-                        'column': column,
-                        'machine_type': comparison.measurement_old.machine_host.machine_type.id,
-                        'configuration': comparison.measurement_old.configuration.id,
-                        'benchmark_workload': comparison.measurement_old.benchmark_workload.id,
-                        'platform_type': comparison.measurement_old.platform_installation.platform_type.id,
-                        'platform_old': comparison.measurement_old.platform_installation.id,
-                        'platform_new': comparison.measurement_new.platform_installation.id,
-
+                    row = {
+                        'column': col,
+                        'machine_type': mt,
+                        'configuration': conf,
+                        'benchmark_workload': bw,
+                        'platform_type': pt,
+                        'results': Simulation.collect_statistics(result_list) if len(result_list) > 0 else {}
                     }
+                    rows.append(row)
 
-                    comparison_dict = {
-                        'actual_p_value': comparison.p_value,
-                        'actual_old_count': comparison.measurement_old_count,
-                        'actual_new_count': comparison.measurement_new_count,
-                        'actual_regression': comparison.regression,
-                        'actual_effect_size': comparison.effect_size,
-                    }
-                    all_runs = comparison.measurement_old_count + comparison.measurement_new_count
+            os.makedirs(evaluation_file.parent, exist_ok=True)
 
-                    if predicted == {}:
-                        predicted_dict = {
-                            'saved_runs': 0,
-                            **{k.replace('actual', 'predicted'): v for k, v in comparison_dict.items()}
-                        }
-                    else:
-                        predicted_dict = {
-                            'saved_runs': all_runs - (predicted['measurement_old_count'] +
-                                                      predicted['measurement_new_count']),
-                            'predicted_p_value': predicted['p_value'],
-                            'predicted_old_count': predicted['measurement_old_count'],
-                            'predicted_new_count': predicted['measurement_new_count'],
-                            'predicted_regression': predicted['regression'],
-                            'predicted_effect_size': predicted['effect_size'],
-                        }
+            with open(evaluation_file, "w") as evaluation_json:
+                json.dump(rows, evaluation_json, indent=4)
 
-                    if comparison.regression and predicted_dict['predicted_regression']:
-                        result = 'true_positive'
-                    elif comparison.regression:
-                        result = 'false_negative'
-                    elif not predicted_dict['predicted_regression']:
-                        result = 'true_negative'
-                    else:
-                        result = 'false_positive'
+    @staticmethod
+    def collect_statistics(result_list):
 
-                    output.append({
-                        **meta_data,
-                        **comparison_dict,
-                        **predicted_dict,
-                        'result': result,
-                    })
-                self.log_info(f"creating {filename}")
-                pd.DataFrame(data=output).to_csv(filename, index=False)
+        # collect statistics
+        effect_size_for_false_negatives = []
+        saved_runs_accumulated, total_runs, saved_runs_accumulated_ratio = 0, 0, 0
+        saved_runs_ratios = []
+
+        # true positives, true negatives, false positives, false negatives, total, total true, total false
+        tp, tn, fp, fn, to, tt, tf = 0, 0, 0, 0, 0, 0, 0
+
+        for result in result_list:
+            to += 1
+            if result['result'] == 'true_positive':
+                tp += 1
+                tt += 1
+            elif result['result'] == 'true_negative':
+                tn += 1
+                tt += 1
+            elif result['result'] == 'false_negative':
+                effect_size_for_false_negatives.append(result['actual_effect_size'])
+                fn += 1
+                tf += 1
+            elif result['result'] == 'false_positive':
+                fp += 1
+                tf += 1
+            else:
+                raise NotImplementedError
+
+            saved_runs_accumulated += result['saved_runs']
+            total_runs += result['all_runs']
+            saved_runs_accumulated_ratio = saved_runs_accumulated / total_runs
+            saved_runs_ratios.append(result['saved_runs'])
+
+        accuracy = tt / to
+        precision = tp / (tp+fp) if (tp+fp) > 0 else np.nan
+        recall = tp / (tp+fn) if (tp+fn) > 0 else np.nan
+        specificity = tn / (tn+fp) if (tn+fp) > 0 else np.nan
+        f1_score = np.nan if np.isnan(recall) or np.isnan(precision) else 2 * ((precision*recall) / (precision+recall))
+        false_positive_rate = fp / (fp+tn) if (fp+tn) > 0 else np.nan
+        false_negative_rate = fn / (fn+tp) if (fn+tp) > 0 else np.nan
+
+        negative_predictive_value = tn / (tn + fn) if (tn + fn) > 0 else np.nan
+        matthews_correlation_coefficient = ((tp*tn) - (fp*fn)) / (np.sqrt((tp+fp)*(tp+fn)*(tn+fp)*(tn+fn)))
+
+        effect_size_as_np_array = np.array(effect_size_for_false_negatives)
+        effect_size_mean = np.mean(effect_size_as_np_array) if len(effect_size_as_np_array) > 0 else np.nan
+        effect_size_median = np.median(effect_size_as_np_array) if len(effect_size_as_np_array) > 0 else np.nan
+        effect_size_std = np.std(effect_size_as_np_array) if len(effect_size_as_np_array) > 0 else np.nan
+        effect_size_min = np.min(effect_size_as_np_array) if len(effect_size_as_np_array) > 0 else np.nan
+        effect_size_max = np.max(effect_size_as_np_array) if len(effect_size_as_np_array) > 0 else np.nan
+
+        saved_runs_ratios_as_array = np.array(saved_runs_ratios)
+        saved_runs_ratios_mean = np.mean(saved_runs_ratios_as_array)
+        saved_runs_ratios_median = np.median(saved_runs_ratios_as_array)
+        saved_runs_ratios_std = np.std(saved_runs_ratios_as_array)
+
+        return {
+            'comparisons': len(result_list),
+            'accuracy': accuracy,
+            'precision': precision,
+            'recall': recall,
+            'specificity': specificity,
+            'f1_score': f1_score,
+            'false_positive_rate': false_positive_rate,
+            'false_negative_rate': false_negative_rate,
+            'negative_predictive_value': negative_predictive_value,
+            'matthews_correlation_coefficient': matthews_correlation_coefficient,
+            'effect_size_mean': effect_size_mean,
+            'effect_size_median': effect_size_median,
+            'effect_size_std': effect_size_std,
+            'effect_size_min': effect_size_min,
+            'effect_size_max': effect_size_max,
+            'saved_runs_ratios_mean': saved_runs_ratios_mean,
+            'saved_runs_ratios_median': saved_runs_ratios_median,
+            'saved_runs_ratios_std': saved_runs_ratios_std,
+            'saved_runs_accumulated_ratio': saved_runs_accumulated_ratio,
+        }
 
     @staticmethod
     def parallel_run(any_list: List[Any], function: callable, process_count: int, result_collection):
@@ -389,7 +545,7 @@ if __name__ == "__main__":
     parser.add_argument("configuration", help="configuration file as json")
     parser.add_argument('-v', '--verbose', action=argparse.BooleanOptionalAction, default=False)
     args = parser.parse_args()
-    import time
+
     configuration_file_path = Path() / args.configuration
     if configuration_file_path.exists():
 
