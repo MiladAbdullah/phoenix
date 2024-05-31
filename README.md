@@ -22,7 +22,7 @@ The scripts are written in `bash` and `python3.12`. First, update the packages a
 Save the path to the current directory to variable `PHOENIX_HOME`. Please note that the following command will add the variable to `.bashrc`.
 
 ```bash
-echo 'export PHOENIX_HOME=$(pwd)' >> ~/.bashrc
+echo 'export PHOENIX_HOME='$(pwd) >> ~/.bashrc
 source ~/.bashrc
 ```
 
