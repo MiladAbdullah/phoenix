@@ -1,0 +1,61 @@
+{
+    "name": "mutation-by-commits",
+    "source": "$PHOENIX_HOME/source",
+    "result": "$PHOENIX_HOME/result",
+    "evaluation": "$PHOENIX_HOME/evaluation",
+    "columns": [
+        "iteration_time_ns"
+    ],
+    "data": {
+        "start": "01-01-2015",
+        "end": "31-12-2023",
+        "filter": {
+            "machine-types": [],
+            "configurations": [],
+            "benchmark-suites": [],
+            "platform-types": [],
+            "benchmarks": [],
+            "platform_installations": []
+        }
+    },
+    "methods": {
+        "pre-process":{
+            "method": "clean_iterations",
+            "configuration": {
+
+            }
+        },
+        "limit": {
+            "method": "constant_limit",
+            "configuration": {
+                "min_run": 11,
+                "max_run": 100
+            }
+        },
+        "frequency": {
+            "method" : "sequential",
+            "configuration": {
+
+            }
+        },
+        "detection": {
+            "method" : "graal_detector",
+            "configuration": {
+            }
+        },
+        "control": {
+            "method": "mutation",
+            "configuration": {
+                "start_date": "01-01-2015",
+                "end_date": "31-12-2023",
+                "train_text": "by-commits,10",
+                "delta": 0.01,
+                "epochs": 10,
+                "boots": 33333
+            }
+        }
+    },
+    "os": {
+        "process_count": 32
+    }
+}
