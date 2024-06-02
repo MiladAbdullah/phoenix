@@ -9,7 +9,7 @@ The scripts are written in `bash` and `python3.12`. First, update the packages a
     ```bash
     apt-get update
     sudo apt-get install wget xz-utils python3 python3-venv make gcc python3-dev -y
-    python3.12 -m venv env
+    python3 -m venv env
     ```
 
 1. Centos/Red Hat
@@ -22,6 +22,7 @@ The scripts are written in `bash` and `python3.12`. First, update the packages a
 Save the path to the current directory to variable `PHOENIX_HOME`. Please note that the following command will add the variable to `.bashrc`.
 
 ```bash
+cd /path/to/phoenix
 echo 'export PHOENIX_HOME='$(pwd) >> ~/.bashrc
 source ~/.bashrc
 ```
@@ -92,7 +93,7 @@ make
 Now, to run the baseline configuration
 ```bash
 cd $PHOENIX_HOME/simulation
-python run.py baseline.json -v
+python run.py configurations/baseline.json -v
 ```
 
 The `-v or --verbose` makes the simulation report all steps and can be chatty; remove it if not required. 
