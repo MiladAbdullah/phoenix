@@ -3,7 +3,7 @@ Phoenix simulates performance testing projects by replacing functional component
 
 
 ## Setting up the environment
-The scripts are written in `bash` and `python3.12`. First, update the packages and install the required applications.
+The scripts are written in `bash` and `python3`. First, update the packages and install the required applications.
 ### Linux
 1. Ubuntu and Debian
     ```bash
