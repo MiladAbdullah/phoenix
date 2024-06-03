@@ -16,7 +16,9 @@ The scripts are written in `bash` and `python3`. First, update the packages and 
     TODO
 
 1. Fedora
-    TODO
+   ```bash
+    sudo dnf install python3-devel
+    ```
 
 
 Save the path to the current directory to variable `PHOENIX_HOME`. Please note that the following command will add the variable to `.bashrc`.
