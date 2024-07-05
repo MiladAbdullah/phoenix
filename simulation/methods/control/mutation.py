@@ -159,6 +159,8 @@ class Mutation(Controller):
 				try:
 					array1 = old_sample.get_data(column, self.log_error)
 					array2 = new_sample.get_data(column, self.log_error)
+					if min(len(array1), min(array2)) == 0:
+						continue
 				except KeyError:
 					results[database_key] = {}
 					continue
