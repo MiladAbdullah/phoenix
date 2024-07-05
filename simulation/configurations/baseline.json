@@ -9,8 +9,8 @@
         "start": "01-01-2015",
         "end": "31-12-2023",
         "filter": {
-            "machine-types": [5],
-            "configurations": [40],
+            "machine-types": [],
+            "configurations": [],
             "benchmark-suites": [],
             "platform-types": [],
             "benchmarks": [],
