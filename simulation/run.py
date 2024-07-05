@@ -325,6 +325,10 @@ class Simulation(Verbose):
 
                         except ObjectDoesNotExist:
                             continue
+
+                        if database_key not in self.control_results:
+                            continue
+
                         predicted = self.control_results[database_key]
                         meta_data = {
                             'column': column,
