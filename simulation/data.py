@@ -21,10 +21,19 @@ class Sample:
 	machine_type: int
 	configuration: int
 	benchmark_workload: int
-	platform_installation: int
+	pl_inst: int
 	count: int
 	measurement: GraalModels.Measurement
 	measurements: list[Path | str]
+
+	def as_dict(self) -> dict:
+		return {
+			"platform_installation": self.pl_inst,
+			"platform_installation_time": self.version_datetime.strftime("%Y-%m-%d %H:%M:%S%z"),
+			"commit": self.measurement.platform_installation.version.commit,
+			"measurements": [str(p) for p in self.measurements]
+		}
+
 
 	def __init__(self, measurement: GraalModels.Measurement) -> None:
 		assert measurement is not None, "Measurement cannot be none"
@@ -90,6 +99,7 @@ class Sample:
 
 	def __str__(self) -> str:
 		return f"{self.pl_inst} - {self.measurement.platform_installation.version.datetime}"
+
 
 
 class Data:
