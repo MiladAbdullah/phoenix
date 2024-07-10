@@ -109,6 +109,14 @@ class Comparison(models.Model):
     def __str__(self):
         return f"{self.id}"
 
+    def as_dict(self):
+        return {
+            "column": self.column,
+            "p_value":  float(self.p_value),
+            "effect_size": float(self.effect_size),
+            "regression": self.regression,
+            "overview": "none" if self.generated else f"https://graal.d3s.mff.cuni.cz/see/difference/{self.real_id}"
+        }
 
 class InvalidComparison(models.Model):
     key = models.CharField(max_length=256, unique=True)
