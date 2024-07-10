@@ -7,8 +7,10 @@ from typing import Callable
 from simulation.data import Sample
 from simulation.methods.control.controller import Controller
 from simulation.methods.detection.bootstrap_change_point_detector import BootstrapChangePointDetector
+from django.core.exceptions import ObjectDoesNotExist
 
 SPLIT_METHODS = ["by-days", "by-commits", "by-date"]
+
 
 class Peass(Controller):
 	start_date: datetime.date
@@ -70,7 +72,7 @@ class Peass(Controller):
 
 #	def train(self, meta_key: str, sample: Sample, column: str):
 
-	def control(self, meta_key: str, sample_pairs: list[tuple[Sample, Sample]], column: str) -> dict[str, dict]:
+	def control(self, meta_key: str, sample_pairs: list[tuple[Sample, Sample]], column: str, truth) -> dict[str, dict]:
 		
 		# Q. How to add Peass call?
 		# The input to any control method is a (1) list of sample pairs, which we have the ground truth for, and (2) the column, such as iteration_time_ns. 
@@ -191,41 +193,65 @@ class Peass(Controller):
 		# We call the peass method as: 
 		# java -jar peass.jar -c $PHOENIX_HOME/simulation/configuration/peass_<variation>.json -i input_paris_meta-key.json -o output_paris_meta-key.json
 
+		cache_directory = self.cache_path / meta_key.replace("-", "/")
+		os.makedirs(cache_directory, exist_ok=True)
+
 		# The evalaution and the rest can be done here
-		
-
-		first_sample_date = sample_pairs[0][0].measurement.platform_installation.version.datetime.date()
-		results = {}
-
-		for i, sample_pair in enumerate(sample_pairs):
-			old_sample, new_sample = sample_pair
-			old_key, new_key = old_sample.get_meta_key(), new_sample.get_meta_key()
-			database_key = f"{old_key}:{new_key}:{column}"
-
+		meta_keys = meta_key.split("-")
+		meta = {
+			"machine_type": meta_keys[0],
+			"configuration": meta_keys[1],
+			"benchmark_workload": meta_keys[2],
+			"platform_installation_type": meta_keys[3]
+		}
+		pairs = []
+		for old_sample, new_sample in sample_pairs:
+			key = f"{old_sample.get_meta_key()}:{new_sample.get_meta_key()}:{column}"
 			try:
-				array1 = old_sample.get_data(column, self.log_error)
-				array2 = new_sample.get_data(column, self.log_error)
-			except KeyError:
-				results[database_key] = {}
-				continue
+				sample_comparison = truth.get(key=key)
+				pairs.append({
+					"old_sample": old_sample.as_dict(),
+					"new_sample": new_sample.as_dict(),
+					"compare_results": sample_comparison.as_dict(),
+				})
+			except ObjectDoesNotExist:
+				self.log_error(f"cannot find {key}")
 
-			bootstrap_detector = BootstrapChangePointDetector(verbose=self.verbose, method_name="MutationComparer")
-			bootstrap_detector.boots = 350
-			bootstrap_detector.p_value_threshold = 0.01
+		meta["pairs"] = pairs
+		with open(cache_directory / f"input_{column}.json", "w") as json_file:
+			json.dump(meta, json_file, indent=4)
 
-			results[database_key] = {}
+		# results = {}
+		#
+		# for i, sample_pair in enumerate(sample_pairs):
+		# 	old_sample, new_sample = sample_pair
+		# 	old_key, new_key = old_sample.get_meta_key(), new_sample.get_meta_key()
+		# 	database_key = f"{old_key}:{new_key}:{column}"
+		#
+		# 	try:
+		# 		array1 = old_sample.get_data(column, self.log_error)
+		# 		array2 = new_sample.get_data(column, self.log_error)
+		# 	except KeyError:
+		# 		results[database_key] = {}
+		# 		continue
+		#
+		# 	bootstrap_detector = BootstrapChangePointDetector(verbose=self.verbose, method_name="MutationComparer")
+		# 	bootstrap_detector.boots = 350
+		# 	bootstrap_detector.p_value_threshold = 0.01
+		#
+		# 	results[database_key] = {}
+		#
+		# 	old_runs = [random.choice(array1) for _ in range(30)]
+		# 	new_runs = [random.choice(array2) for _ in range(30)]
+		# 	compared = bootstrap_detector.compute_difference_one_per_rep(old_runs, new_runs)
+		#
+		# 	if len(compared) > 0:
+		# 		if compared['p_value'] > 0.01:
+		# 			# stop experiment, no regression
+		# 			compared['regression'] = False
+		# 			results[database_key] = compared
+		# 			break
+		# 		else:
+		# 			continue
 
-			old_runs = [random.choice(array1) for _ in range(30)]
-			new_runs = [random.choice(array2) for _ in range(30)]
-			compared = bootstrap_detector.compute_difference_one_per_rep(old_runs, new_runs)
-
-			if len(compared) > 0:
-				if compared['p_value'] > 0.01:
-					# stop experiment, no regression
-					compared['regression'] = False
-					results[database_key] = compared
-					break
-				else:
-					continue
-
-		return results
+		return {}

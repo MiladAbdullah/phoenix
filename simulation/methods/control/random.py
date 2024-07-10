@@ -10,7 +10,7 @@ class Random(Controller):
 		self.boots = boots
 		super().__init__(verbose=verbose, method_name="RandomController")
 
-	def control(self, meta_key: str, sample_pairs: list[tuple[Sample, Sample]], column: str) -> dict[str, dict]:
+	def control(self, meta_key: str, sample_pairs: list[tuple[Sample, Sample]], column: str, truth) -> dict[str, dict]:
 		if len(sample_pairs) == 0:
 			self.log_warning("empty sample pairs")
 			return {}

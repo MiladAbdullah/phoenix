@@ -132,7 +132,7 @@ class Mutation(Controller):
 				self.benchmark_configurations[meta_key][int_min_run]['min'] = min(threshold, pta['min'])
 				self.benchmark_configurations[meta_key][int_min_run]['max'] = max(threshold, pta['max'])
 
-	def control(self, meta_key: str, sample_pairs: list[tuple[Sample, Sample]], column: str) -> dict[str, dict]:
+	def control(self, meta_key: str, sample_pairs: list[tuple[Sample, Sample]], column: str, truth) -> dict[str, dict]:
 		if len(sample_pairs) == 0:
 			self.log_warning("empty sample pairs")
 			return {}
