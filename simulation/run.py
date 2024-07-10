@@ -228,7 +228,7 @@ class Simulation(Verbose):
             for meta_key in meta_keys:
                 sample_pairs = self.comparing_schedule[meta_key]
                 for column in self.columns:
-                    controlled_comparisons = instance.control(meta_key, sample_pairs, column)
+                    controlled_comparisons = instance.control(meta_key, sample_pairs, column, self.truth)
                     for database_key, controlled_comparison in controlled_comparisons.items():
                         local_results[database_key] = controlled_comparison
 
