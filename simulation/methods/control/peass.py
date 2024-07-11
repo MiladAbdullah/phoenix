@@ -2,6 +2,7 @@ import datetime
 import json
 import os
 import random
+import subprocess
 from pathlib import Path
 from typing import Callable
 from simulation.data import Sample
@@ -220,6 +221,9 @@ class Peass(Controller):
 		meta["pairs"] = pairs
 		with open(cache_directory / f"input_{column}.json", "w") as json_file:
 			json.dump(meta, json_file, indent=4)
+			
+		peass_project = os.getenv("PEASS_PRECISION")
+		subprocess.Popen(["java", "-cp", peass_project + "/precision-analysis/build/libs/precision-analysis-all-2.13.jar", "de.precision.analysis.graalvm.GraalVMJSONPrecisionDeterminer", "input_${column}.json"])
 
 		# results = {}
 		#
