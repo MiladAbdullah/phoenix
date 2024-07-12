@@ -218,12 +218,16 @@ class Peass(Controller):
 			except ObjectDoesNotExist:
 				self.log_error(f"cannot find {key}")
 
+		peass_project = os.getenv("PEASS_PRECISION")
+
 		meta["pairs"] = pairs
 		with open(cache_directory / f"input_{column}.json", "w") as json_file:
 			json.dump(meta, json_file, indent=4)
+			subprocess.Popen(["java", "-cp", peass_project + "/precision-analysis/build/libs/precision-analysis-all-2.13.jar", 
+					"de.precision.analysis.graalvm.GraalVMJSONPrecisionDeterminer", "--inputJSON="+json_file.name])
 			
-		peass_project = os.getenv("PEASS_PRECISION")
-		subprocess.Popen(["java", "-cp", peass_project + "/precision-analysis/build/libs/precision-analysis-all-2.13.jar", "de.precision.analysis.graalvm.GraalVMJSONPrecisionDeterminer", "input_${column}.json"])
+		
+		
 
 		# results = {}
 		#
