@@ -1,0 +1,35 @@
+datetime:
+  from: "2021-01-01T00:00:00"
+  to: "2025-01-01T00:00:00"
+
+filters:
+  machine_types:
+    - all
+  configurations:
+    - all
+  suites:
+    - all
+  benchmarks:
+    - all
+  platform_types:
+    - all
+
+metrics:
+  - iteration_time_ns
+
+methods:
+  pick_commits:
+    method: methods.commit.AllCommits
+  dimension:
+      method: methods.dimension.Peass
+      kwargs:
+        train_duration_days: 180
+        train_count: 100
+  analyze:
+    method: methods.analyze.Peass
+
+evaluations:
+  - evaluation.FalseAlarmRate
+  - evaluation.MissedRegressions
+  - evaluation.LatencyDetector
+  - evaluation.SavedRuns

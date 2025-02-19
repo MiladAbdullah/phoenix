@@ -1,0 +1,20 @@
+datetime:
+from: "2021-01-01 00:00:00"
+  to: "2022-01-01 00:00:00"
+
+methods:
+  preprocesses:
+    - simulation.methods.preprocess.DiscardWarmup
+    - simulation.methods.preprocess.DiscardOutliers
+  pick_commits:
+    method: simulation.methods.picker.AllCommits
+  detect:
+    method: simulation.methods.detector.GraalVM
+    boots: 33333
+  analyze:
+    method: simulation.methods.analyze.Constant
+
+evaluations:
+  - simulation.evaluation.FalseAlarmRate
+  - simulation.evaluation.LatencyDetector
+  - simulation.evaluation.SavedRuns

@@ -1,196 +1,141 @@
+import datetime
+import json
 import os
+import requests
+from simulation.logger import Logger
+from simulation.measurement import Measurement
 from pathlib import Path
-import django
-import django.db
-import django.db.models
-import numpy as np
-import pandas as pd
-from pandas.errors import EmptyDataError
-
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'local_settings')
-django.setup()
-
-from graal import models as GraalModels
-from datetime import date, datetime
-from typing import List
-import pytz
 
 
-class Sample:
-	version_datetime: date
-	machine_type: int
-	configuration: int
-	benchmark_workload: int
-	pl_inst: int
-	count: int
-	measurement: GraalModels.Measurement
-	measurements: list[Path | str]
+class Data(Logger):
+	cache_path: Path
+	graalvm_web: str
+	graalvm_port: str
+	measurements: dict[str, list[Measurement]]
+	"""
+		The measurements structure has the following shape
+		combination <machine_type, configuration, benchmark, platform_type> : list[measurement]
+		a sorted list of the measurements
+	"""
+	def __init__(self, datetime_dict: dict, filters: dict) -> None:
+		super().__init__(method_name="Simulation/Data")
 
-	def as_dict(self) -> dict:
-		return {
-			"platform_installation": self.pl_inst,
-			"platform_installation_time": self.version_datetime.strftime("%Y-%m-%d %H:%M:%S%z"),
-			"commit": self.measurement.platform_installation.version.commit,
-			"measurements": [str(p) for p in self.measurements]
+		self.graalvm_web = os.getenv("GRAALVM_WEB")
+		if self.graalvm_web is None:
+			self.log_error("__init__", "Code 201: GRAALVM_WEB ip is not set, use export GRAALVM_WEB=\"x.x.x.x\"")
+			exit(201)
+
+		self.graalvm_port = os.getenv("GRAALVM_PORT")
+		if self.graalvm_port is None:
+			self.log_error("__init__", "Code 202: GRAALVM_PORT ip is not set, use export GRAALVM_WEB=6677")
+			exit(202)
+
+		self.cache_path = Path() / os.getenv("PHOENIX_HOME") / "_cache/data/"
+		os.makedirs(self.cache_path, exist_ok=True)
+
+		combinations = self.parse_filters(filters)
+		self.measurements = {
+			key: sorted(value)
+			for key, value in self.get_measurements(combinations, datetime_dict).items()
 		}
 
-
-	def __init__(self, measurement: GraalModels.Measurement) -> None:
-		assert measurement is not None, "Measurement cannot be none"
-
-		self.version_datetime = measurement.platform_installation.version.datetime
-		self.machine_type = measurement.machine_host.machine_type.id
-		self.configuration = measurement.configuration.id
-		self.benchmark_workload = measurement.benchmark_workload.id
-		self.pl_inst = measurement.platform_installation.id
-		self.pl_inst_type = measurement.platform_installation.platform_type.id
-
-		self.measurement = measurement
-		self.measurements = [path for path in Path(measurement.measurement_directory).glob("*.csv")]
-		self.count = len(self.measurements)
-
-	def change_measurement_paths(self, new_paths: List[Path | str]) -> None:
-		self.measurements = new_paths
-		self.count = len(new_paths)
-
-	def get_data(self, column: str, error_logger: callable = None) -> List[np.array]:
-		my_data = []
-		for measurement in self.measurements:
-			try:
-				measurement_reading = pd.read_csv(measurement)
-				my_data.append(measurement_reading[column].to_numpy())
-
-			except (FileNotFoundError, PermissionError, UnicodeDecodeError, EmptyDataError, MemoryError) as e:
-				if error_logger is not None:
-					error_logger(f"Failure in reading file {measurement}, more details: {e}")
-
-			except (KeyError, AttributeError, TypeError) as e:
-				raise KeyError
-
-		return my_data
-
-	def get_meta_key(self):
-		return f"{self.machine_type}-{self.configuration}-{self.benchmark_workload}-{self.pl_inst_type}:{self.pl_inst}"
-
-	def is_sibling(self, other) -> bool:
+	def parse_filters(self, filters: dict) -> list:
 		"""
-		checks if other sample is a sibling of self and not equal to
-		:param other:
-		:return:
+
+		:param filters: a set of filters for machine type, configuration, suite, benchmark, platform_type
+		:return: a set of unique url based filters [(?machine_type=5&...)]
 		"""
-		_self, _other = self.measurement, other.measurement
-		if _self.machine_host.machine_type == _other.machine_host.machine_type:
-			if _self.configuration == _other.configuration:
-				if _self.benchmark_workload == _other.benchmark_workload:
-					if _self.platform_installation.platform_type == _other.platform_installation.platform_type:
-						if _self.platform_installation.version != _other.platform_installation.version:
-							return True
+		base_url = f"http://{self.graalvm_web}:{self.graalvm_port}/api"
+		filtered_meta = {}
 
-		return False
+		for key, value_list in filters.items():
+			key_url = f"{base_url}/{key}"
+			response = requests.get(key_url, headers={"Accept": "application/json"})
+			if response.status_code != 200:
+				self.log_error("parse_filters", f"Code 203: the url {key_url} returned {response.status_code}")
+				exit(203)
 
-	def is_older(self, other) -> bool:
+			items = [str(item['id']) for item in json.loads(response.text)]
+
+			filtered_meta[key] = []
+			for value in value_list:
+				if value.lower() == "all":
+					filtered_meta[key] = items
+					break
+				else:
+					try:
+						if int(value) in items:
+							filtered_meta[key].append(str(value))
+					except ValueError:
+						self.log_warn("parse_filters", f"Warning: ignoring unknown id {value} in the filter of {key}")
+						continue
+
+		response = requests.get(f"{base_url}/combinations", headers={"Accept": "application/json"})
+		if response.status_code != 200:
+			self.log_error("parse_filters", f"Code 203: the url {f"{base_url}/combinations"} returned {response.status_code}")
+			exit(203)
+
+		possible_combinations = json.loads(response.text)
+		filtered_combinations = []
+		for possible_combination in possible_combinations:
+			m, c, s, b, p = possible_combination['id'].split('-')
+			if m in filtered_meta['machine_types'] and \
+				c in filtered_meta['configurations'] and \
+				s in filtered_meta['suites'] and \
+				b in filtered_meta['benchmarks'] and \
+				p in filtered_meta['platform_types']:
+
+				filtered_combinations.append((m, c, s, b, p))
+
+		return filtered_combinations
+
+	def get_measurements(self, combinations: list, datetime_filter: dict) -> dict[str, list[Measurement]]:
 		"""
-		checks if other sample is a newer that self
-		:param other:
-		:return:
+		uses a cache system to reduce calls to the api, since they are not going to be updated at any time
+		:param combinations: list of possible combinations
+		:return: map each combination with a list of possible measurements
 		"""
-		_self, _other = self.measurement, other.measurement
-		return _self.platform_installation.version.datetime < _other.platform_installation.version.datetime
 
-	def __str__(self) -> str:
-		return f"{self.pl_inst} - {self.measurement.platform_installation.version.datetime}"
+		if not self.cache_path.exists():
+			self.log_error("get_measurements", f"Code 205: the path {self.cache_path} does not exist")
+			exit(205)
 
+		from_datetime = datetime.datetime.strptime(datetime_filter['from'], "%Y-%m-%dT%H:%M:%S")
+		to_datetime = datetime.datetime.strptime(datetime_filter['to'], "%Y-%m-%dT%H:%M:%S")
 
+		measurements = {}
 
-class Data:
-	start: date
-	end: date
-	filter: dict[str, list[int]]
-	query_set: django.db.models.query.QuerySet
+		for combination in combinations:
+			m, c, s, b, p = combination
+			combination_id = "-".join([str(x) for x in combination])
+			combination_file = f"{combination_id}.json"
 
-	# Hierarchy based storage
-	# {machine_type-configuration-benchmark_workload-platform_installation: sample}
-	# the path can be changed for a new pre-processed path
-	samples: dict[str, List[Sample]]
-
-	def __init__(self, configuration: dict = None, query_set: django.db.models.query.QuerySet = None) -> None:
-		"""
-		Creates dataset from configuration and a query set.
-		If configuration is not provided then we take from the query set.
-		If query set is not provided, then we take all the data
-		"""
-		# from configuration
-		if configuration is not None:
-			if "start" in configuration:
-				self.start = datetime.strptime(configuration["start"], "%d-%m-%Y")
+			combination_path = self.cache_path / combination_file
+			if combination_path.exists():
+				with open(combination_path, "r") as combination_json:
+					measurements_json = json.load(combination_json)
 			else:
-				self.start = datetime.strptime("23-10-2015", "%d-%m-%Y")
+				url = (
+					f"http://{self.graalvm_web}:{self.graalvm_port}/api/measurements" 
+					"?" f"combination__machine_type__id={m}&"
+					f"combination__configuration__id={c}&"
+					f"combination__suite__id={s}&"
+					f"combination__benchmark__id={b}&"
+					f"version__platform_type__id={p}"
+				)
+				response = requests.get(url, headers={"Accept": "application/json"})
+				if response.status_code != 200:
+					self.log_error("get_measurements", f"Code 205: the url {url} returned {response.status_code}")
+					exit(206)
 
-			if "end" in configuration:
-				self.end = datetime.strptime(configuration["end"], "%d-%m-%Y")
-			else:
-				self.end = datetime.strptime("1-1-2023", "%d-%m-%Y")
+				measurements_json = json.loads(response.text)
+				with open(combination_path, "w") as combination_json:
+					json.dump(measurements_json, combination_json, indent=4)
 
-			# timezone aware
-			self.start = pytz.utc.localize(self.start)
-			self.end = pytz.utc.localize(self.end)
+			measurements[combination_id] = []
 
-			if "filter" in configuration:
-				self.filter = configuration["filter"]
+			for measurement in measurements_json:
+				if from_datetime <= datetime.datetime.strptime(measurement['datetime'], "%Y-%m-%dT%H:%M:%S") <= to_datetime:
+					measurements[combination_id].append(Measurement(measurement))
 
-			self.query_set = query_set if query_set is not None else GraalModels.Measurement.objects.all()
-			self.query_set = self.query_set.filter(platform_installation__version__datetime__gte=self.start) \
-				.filter(platform_installation__version__datetime__lt=self.end)
-
-			for key, values in self.filter.items():
-				if len(values) == 0:
-					continue
-
-				if key == "machine-types":
-					self.query_set = self.query_set.filter(machine_host__machine_type__id__in=values)
-
-				elif key == "configurations":
-					self.query_set = self.query_set.filter(configuration__id__in=values)
-
-				elif key == "benchmark-suites":
-					self.query_set = self.query_set.filter(benchmark_workload__benchmark_type__id__in=values)
-
-				elif key == "platform-types":
-					self.query_set = self.query_set.filter(platform_installation__platform_type__id__in=values)
-
-				elif key == "benchmarks":
-					self.query_set = self.query_set.filter(benchmark_workload__id__in=values)
-
-				elif key == "platform_installations":
-					self.query_set = self.query_set.filter(platform_installation__id__in=values)
-
-		# from query set
-		else:
-			self.query_set = GraalModels.Measurement.objects.all() if query_set is None else query_set
-			sorted_query = self.query_set.order_by("platform_installation__version__datetime")
-			self.start, self.end = sorted_query[-1], sorted_query[0]
-
-		assert self.start <= self.end, f"start ({self.start}) cannot be later than end ({self.end})"
-		self.samples = Data.create_samples(self.query_set)
-
-	@staticmethod
-	def create_samples(query_set: django.db.models.query.QuerySet) -> dict[str, List[Sample]]:
-
-		samples = {}
-		for measurement in query_set:
-			machine_type_id = measurement.machine_host.machine_type.id
-			configuration_id = measurement.configuration.id
-			benchmark_workload_id = measurement.benchmark_workload.id
-			platform_installation_type_id = measurement.platform_installation.platform_type.id
-			platform_installation_id = measurement.platform_installation.id
-
-			key = f"{machine_type_id}-{configuration_id}-{benchmark_workload_id}-{platform_installation_type_id}"
-			if key not in samples:
-				samples[key] = []
-
-			samples[key].append(Sample(measurement))
-
-		return samples
-
-	def __str__(self) -> str:
-		return f"data range between {self.start} and {self.end}, including {len(self.samples)} sample families"
+		return measurements

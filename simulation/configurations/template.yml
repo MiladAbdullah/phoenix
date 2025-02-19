@@ -1,0 +1,19 @@
+datetime:
+  from: str
+  to: str
+
+metrics: list
+
+filters:
+  machine_types: list
+  configurations: list
+  suites: list
+  benchmarks: list
+  platform_types: list
+
+methods:
+  pick_commits: dict
+  dimension: dict
+  analyze: dict
+
+evaluations: list

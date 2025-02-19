@@ -1,0 +1,33 @@
+datetime:
+  from: "2021-01-01T00:00:00"
+  to: "2025-01-01T00:00:00"
+
+filters:
+  machine_types:
+    - all
+  configurations:
+    - all
+  suites:
+    - all
+  benchmarks:
+    - all
+  platform_types:
+    - all
+
+metrics:
+  - iteration_time_ns
+
+
+methods:
+  pick_commits:
+    method: methods.commit.AllCommits
+  dimension:
+      method: methods.dimension.Max
+  analyze:
+    method: methods.analyze.Constant
+
+evaluations:
+  - evaluation.FalseAlarmRate
+  - evaluation.MissedRegressions
+  - evaluation.LatencyDetector
+  - evaluation.SavedRuns
