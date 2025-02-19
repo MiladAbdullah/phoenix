@@ -168,3 +168,6 @@ evaluation/
 *.csv
 *.png
 _old_stuff/
+_cache/
+*.logs
+.idea/
