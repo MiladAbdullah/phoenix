@@ -171,3 +171,4 @@ _old_stuff/
 _cache/
 *.logs
 .idea/
+_results/
