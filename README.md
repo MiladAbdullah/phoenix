@@ -157,12 +157,3 @@ The baseline configuration is a `json` file:
     }
 }
 ```
-
-
-
-
-
-## Running other configurations
-TODO
-
-## Tailoring for different performance testing projects
