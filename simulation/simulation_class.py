@@ -1,13 +1,14 @@
 import importlib
+import json
 import os
 import threading
-from concurrent.futures import ThreadPoolExecutor
 
 import yaml
 from yaml.parser import ParserError
 
 import simulation.methods.analyze.constant
 from simulation.data import Data
+from simulation.evaluation.base import EvaluationBase
 from simulation.logger import Logger
 from pathlib import Path
 from simulation.methods.commit.base import CommitBase
@@ -24,6 +25,7 @@ class Simulation(Logger):
 	dimension_calculator: DimensionBase
 	analyzer: AnalyzeBase
 	metrics: list[str]
+	mechanism:  dict[str, dict]
 
 	def __init__(self, configuration_file: str, output: str, thread_count: int):
 		super().__init__(method_name="SIMULATION")
@@ -122,9 +124,9 @@ class Simulation(Logger):
 				"kwargs": {} if "kwargs" not in item else item["kwargs"]
 			}
 
-		mechanism['evaluations'] = []
+		mechanism['evaluations'] = {}
 		for evaluation_method in configuration['evaluations']:
-			mechanism['evaluations'].append(get_class_from_string(f"simulation.{evaluation_method}"))
+			mechanism['evaluations'][evaluation_method] = get_class_from_string(f"simulation.{evaluation_method}")
 
 		# exporting
 		self.commit_picker = mechanism['methods']['pick_commits']['class'](
@@ -136,23 +138,28 @@ class Simulation(Logger):
 
 		return mechanism
 
-	def run(self) -> None:
+	def run(self, output: Path) -> None:
+
 		configuration = self.load(self.configuration_path)
-		mechanism = self.load_mechanism(configuration)
-		data = Data(mechanism['datetime'], mechanism['filters'])
-		evaluation = {}
+		self.mechanism = self.load_mechanism(configuration)
+		data = Data(self.mechanism['datetime'], self.mechanism['filters'])
 
-		def process_combination(_keys: list, _metric: str) -> None:
+		def process_combination(_keys: list, _metric: str, _evaluation_path: Path) -> None:
+
 			for _key in _keys:
-				dimension_calculator = mechanism['methods']['dimension']['class'](
-					*mechanism['methods']['dimension']['args'],
-					**mechanism['methods']['dimension']['kwargs']
+				dimension_calculator = self.mechanism['methods']['dimension']['class'](
+					*self.mechanism['methods']['dimension']['args'],
+					**self.mechanism['methods']['dimension']['kwargs']
 				)
 
-				analyzer = mechanism['methods']['analyze']['class'](
-					*mechanism['methods']['analyze']['args'],
-					**mechanism['methods']['analyze']['kwargs']
+				analyzer = self.mechanism['methods']['analyze']['class'](
+					*self.mechanism['methods']['analyze']['args'],
+					**self.mechanism['methods']['analyze']['kwargs']
 				)
+
+				evaluators = {_method: _class() for _method, _class in self.mechanism['evaluations'].items()}
+				evaluation = {}
+				results = []
 
 				ground_truth_analyzer = simulation.methods.analyze.constant.Constant()
 				ground_truth_max_runs = simulation.methods.dimension.Max()
@@ -164,32 +171,107 @@ class Simulation(Logger):
 				for pair in _commit_pairs:
 					old, new = pair
 					run_sizes = dimension_calculator.calculate_dimension(old, new)
-					# if _key not in evaluation:
-					# 	evaluation[_key] = []
-					#
-					# evaluation[_key].append({
-					# 	"old_id": old.id,
-					# 	"new_id": new.id,
-					# 	"result": analyzer.analyze(_key, old, new, _metric, run_sizes),
-					# 	"ground_truth": ground_truth_analyzer.analyze(
-					# 		_key, old, new, _metric, ground_truth_max_runs.calculate_dimension(old, new)),
-					# })
+
+					results.append({
+						"old_id": old.id,
+						"new_id": new.id,
+						"result": analyzer.analyze(_key, old, new, _metric, run_sizes),
+						"ground_truth": ground_truth_analyzer.analyze(
+							_key, old, new, _metric, ground_truth_max_runs.calculate_dimension(old, new)),
+					})
+
+				for evaluator_key, evaluator_object in evaluators.items():
+					if isinstance(evaluator_object, EvaluationBase):
+						evaluation[evaluator_key] = evaluator_object.evaluate(_key, results)
+
+				filename = _evaluation_path / f"{_key}.json"
+				with open(filename, "w") as json_file:
+					json.dump(evaluation, json_file, indent=4)
 
 		for metric in self.metrics:
+			evaluation_path = output / metric
+			os.makedirs(evaluation_path, exist_ok=True)
 			keys = [k for k in data.measurements.keys()]
 			length = len(keys)
 			chunk = length // self.thread_count + 1
 			keys_per_threads = [keys[i * chunk: min(length, (i + 1) * chunk)] for i in range(self.thread_count)]
 			threads = []
-
 			for keys_per_thread in keys_per_threads:
 				if len(keys_per_thread) == 0:
 					continue
-				thread = threading.Thread(target=process_combination, args=([keys_per_thread, metric]))
+				thread = threading.Thread(target=process_combination, args=([keys_per_thread, metric, evaluation_path]))
 				threads.append(thread)
 				thread.start()
 
 			for thread in threads:
 				thread.join()
 
-		print (evaluation)
+			self.collect_evaluation(keys, evaluation_path)
+
+	def collect_evaluation(self, keys: list[str], evaluation_path: Path) -> None:
+
+		evaluators = {_method: _class() for _method, _class in self.mechanism['evaluations'].items()}
+
+		def collect_individual(data: list[dict]) -> dict:
+			return {
+				evaluator_key: evaluator.collect([k[evaluator_key] for k in data])
+				for evaluator_key, evaluator in evaluators.items()
+			}
+
+		def write_json(_key: Path, items: list) -> None:
+			_response = collect_individual(items)
+			with open(_key, "w") as _json_file:
+				json.dump(_response, _json_file, indent=4)
+
+		collection = {}
+
+		for key in keys:
+			key_path = evaluation_path / f"{key}.json"
+			if not key_path.exists():
+				continue
+
+			m, c, s, b, p = key.split('-')
+
+			if m not in collection:
+				collection[m] = {}
+
+			if c not in collection[m]:
+				collection[m][c] = {}
+
+			if s not in collection[m][c]:
+				collection[m][c][s] = {}
+
+			if b not in collection[m][c][s]:
+				collection[m][c][s][b] = []
+
+			with open(key_path, "r") as json_file:
+				collection[m][c][s][b].append(json.load(json_file))
+
+		for m, m_items in collection.items():
+			m_item_list = []
+
+			for c, c_items in m_items.items():
+				c_item_list = []
+
+				for s, s_items in c_items.items():
+					s_item_list = []
+
+					for b, b_items in s_items.items():
+						b_key = evaluation_path / f"collected/{m}/{c}/{s}/{b}.json"
+						os.makedirs(b_key.parent, exist_ok=True)
+						write_json(b_key, b_items)
+
+						s_item_list.extend(b_items)
+
+					s_key = evaluation_path / f"collected/{m}/{c}/{s}.json"
+					write_json(s_key, s_item_list)
+
+					c_item_list.extend(s_item_list)
+
+				c_key = evaluation_path / f"collected/{m}/{c}.json"
+				write_json(c_key, c_item_list)
+
+				m_item_list.extend(c_item_list)
+
+			m_key = evaluation_path / f"collected/{m}.json"
+			write_json(m_key, m_item_list)

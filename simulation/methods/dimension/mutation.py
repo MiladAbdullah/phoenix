@@ -51,14 +51,14 @@ class Mutation(DimensionBase):
 
 	def calculate_dimension(self, old_measurement: Measurement, new_measurement: Measurement) -> dict:
 
-		old_count = new_count = thresholds = None
+		thresholds = None
+		old_count = old_measurement.count
+		new_count = new_measurement.count
 
 		if self.is_train(old_measurement):
 			self.learn(old_measurement)
-			old_count = old_measurement.count
-			new_count = new_measurement.count
 		else:
-			thresholds = self.predict(old_measurement.id)
+			thresholds = self.gather_thresholds()
 
 		return {
 			"old_run_count": old_count,
@@ -101,5 +101,21 @@ class Mutation(DimensionBase):
 
 		self.train_set.append(thresholds)
 
-	def predict(self, key: str) -> dict:
-		pass
+	def gather_thresholds(self) -> dict:
+		if len(self.train_set) == 0:
+			self.log_warn("gather_thresholds", "No train sample was collected")
+			return {}
+
+		aggregated = {}
+		for run in range(5,31,5):
+			key = f"{run}-{run}-max-1"
+			threshold_group = [sample[key] for sample in self.train_set if key in sample]
+			p_values = np.array([s["p_value"]  for sample in threshold_group for s in sample])
+			aggregated[key] = {
+				"mean": np.mean(p_values),
+				"max": np.max(p_values),
+				"min": np.min(p_values),
+				"median": np.median(p_values),
+			}
+
+		return aggregated

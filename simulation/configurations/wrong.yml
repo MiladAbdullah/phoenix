@@ -15,6 +15,6 @@ methods:
     method: simulation.methods.analyze.Constant
 
 evaluations:
-  - simulation.evaluation.FalseAlarmRate
-  - simulation.evaluation.LatencyDetector
   - simulation.evaluation.SavedRuns
+  - simulation.evaluation.ConfusionMatrix
+  - evaluation.ErrorRatio

@@ -16,7 +16,7 @@ class Constant(AnalyzeBase):
 
 		if ground_truth != {}:
 			if run_key in ground_truth:
-				return {run_key: ground_truth[run_key]}
+				return ground_truth[run_key]
 
 		comparer = Comparer(run_size=run_size, boots=33333)
 		new_result = comparer.compare(old_ms, new_ms, column)
@@ -24,4 +24,4 @@ class Constant(AnalyzeBase):
 		with open(path, "w") as json_file:
 			json.dump({run_key: new_result, **ground_truth}, json_file, indent=4)
 
-		return {run_key: new_result}
+		return new_result

@@ -1,0 +1,30 @@
+{
+    "evaluation.SavedRuns": {
+        "total_runs": 3250,
+        "used_runs": 1843,
+        "saved_runs": 1407,
+        "saved_runs_ratio": 0.4329230769230769
+    },
+    "evaluation.ConfusionMatrix": {
+        "total_positives": 7,
+        "total_negatives": 59,
+        "tp": 4,
+        "tn": 59,
+        "fp": 0,
+        "fn": 3,
+        "accuracy": 0.9545454545454546,
+        "w_accuracy": 0.7857142857142858
+    },
+    "evaluation.ErrorRatio": {
+        "error": 0.045454545454545456,
+        "missed_improvements_count": 1,
+        "missed_improvements_middle": -0.012046348262937528,
+        "missed_improvements_mean": -0.012046348262937528,
+        "missed_degrades_count": 2,
+        "missed_degrades_middle": 0.016000447913777215,
+        "missed_degrades_mean": 0.015792921679530735,
+        "missed_perf_count": 3,
+        "missed_perf_middle": 0.015585395445284256,
+        "missed_perf_mean": 0.014544063873999665
+    }
+}

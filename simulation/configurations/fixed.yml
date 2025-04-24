@@ -30,7 +30,6 @@ methods:
     method: methods.analyze.Constant
 
 evaluations:
-  - evaluation.FalseAlarmRate
-  - evaluation.MissedRegressions
-  - evaluation.LatencyDetector
   - evaluation.SavedRuns
+  - evaluation.ConfusionMatrix
+  - evaluation.ErrorRatio

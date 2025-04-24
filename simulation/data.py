@@ -59,12 +59,12 @@ class Data(Logger):
 
 			filtered_meta[key] = []
 			for value in value_list:
-				if value.lower() == "all":
+				if isinstance(value, str) and value.lower() == "all":
 					filtered_meta[key] = items
 					break
 				else:
 					try:
-						if int(value) in items:
+						if str(int(value)) in items:
 							filtered_meta[key].append(str(value))
 					except ValueError:
 						self.log_warn("parse_filters", f"Warning: ignoring unknown id {value} in the filter of {key}")
